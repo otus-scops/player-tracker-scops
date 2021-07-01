@@ -6,7 +6,7 @@
 // @namespace      https://github.com/jonatkins/ingress-intel-total-conversion
 // @updateURL      https://github.com/otusscops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
 // @downloadURL    https://github.com/otusscops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
-// @description    [2018-10-30.0001] PlayerTracker(nhz) トレース色、追跡、履歴時間指定版.
+// @description    [2021-07-01.0001] PlayerTracker(scops) 指定プレイヤーの活動開始通知を実装.
 // @include        https://*.ingress.com/intel*
 // @include        http://*.ingress.com/intel*
 // @match          https://*.ingress.com/intel*
