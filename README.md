@@ -1,7 +1,7 @@
 # Player Tracker (otusscops)変更版(player-tracker-ja-scops)
 
 ## はじめに
-これは、[IITC-ja: Ingress Intel Total Conversion 日本語化版](https://ingress.love/iitc-ja/)を元にNightHackzさんが以下の修正を行っているプラグインをもとに <br> 
+これは、[IITC-ja: Ingress Intel Total Conversion 日本語化版](https://ingress.love/iitc-ja/)を元にNightHackzさんが以下の修正を加えたプラグインをもとに <br> 
 - AGのトレース破線色をRES/ENLで色分け
 - AGの追跡時間を3,6,12,24時間と指定可能にした
 - AGの履歴詳細画面の履歴数を指定可能にした
