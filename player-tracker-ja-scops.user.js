@@ -4,8 +4,8 @@
 // @category       Layer
 // @version        0.11.2.20210701.ja.scops.0001
 // @namespace      https://github.com/jonatkins/ingress-intel-total-conversion
-// @updateURL      https://github.com/otusscops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
-// @downloadURL    https://github.com/otusscops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
+// @updateURL      https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
+// @downloadURL    https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
 // @description    [2021-07-01.0001] PlayerTracker(scops) 指定プレイヤーの活動開始通知を実装.
 // @include        https://*.ingress.com/intel*
 // @include        http://*.ingress.com/intel*
