@@ -11,6 +11,7 @@
 
 ## ToDo
 - アラートの表示をNotification APIに変更する
+- マーカーを変更する
 
 ## インストール
 [Plugin Download](https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js) <br>
