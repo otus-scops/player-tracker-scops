@@ -12,7 +12,7 @@
 ## インストール
 [Plugin Download](https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js) <br>
 
-- あらかじめ、標準の「Plaert tracker」はOFFに設定してください。<br>
+- あらかじめ、標準の「Pl tracker」はOFFに設定してください。<br>
 ![設定画面](fig1-selection.png)<br>
 - 上記「Plugin Download」リンクを選択し、開いた画面で「インストール」ボタンを押してください。<br>
 
