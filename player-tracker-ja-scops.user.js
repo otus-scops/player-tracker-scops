@@ -35,6 +35,7 @@ function wrapper(plugin_info) {
     window.PLAYER_TRACKER_MAX_TIME = 60*60*1000; // in milliseconds
     window.PLAYER_TRACKER_MIN_ZOOM = 9;
     window.PLAYER_TRACKER_MIN_OPACITY = 0.3;
+    window.PLAYER_TRACKER_ALERT_SURVEILANCE_MSEC = 10 * 60 * 1000; // in milliseconds
     window.PLAYER_TRACKER_LINE_COLOUR_ENL = '#ff0080';
     window.PLAYER_TRACKER_LINE_COLOUR_RES = '#50443c';
 
@@ -165,6 +166,15 @@ function wrapper(plugin_info) {
             id : 'player-tracker-scops-opt-surveillance-agents'
         }));
         html.append($('<p>').text('※エージェントごとに改行で区切ってください'));
+        if(('Notification' in window)){
+            if(Notification.permission === 'denied' || Notification.permission === 'default') {
+                html.append($('<button>', { id:'enableNotification' }).text('通知許可')
+                            .on('click', function(e){
+                    Notification.requestPermission(function(permission) {});
+                }));
+            }
+        }
+
 
         //if (window.useAndroidPanes()) {
         //     $('<div>' , {
@@ -345,8 +355,14 @@ function wrapper(plugin_info) {
                     events: [newEvent]
                 };
                 // 10分以内のイベント発生でポップとみなす
-                if(OptionData.surveillance.indexOf(plrname)>=0 && newEvent.time > (new Date()).getTime() - (600 * 1000)){
-                    alert(plrname + ' が活動中です！');
+                if(OptionData.surveillance.indexOf(plrname)>=0 && newEvent.time > (new Date()).getTime() - (PLAYER_TRACKER_ALERT_SURVEILANCE_MSEC)){
+                    if(('Notification' in window) && Notification.permission === 'granted'){
+                        new Notification(plrname + ' が活動中です！', {
+
+                        });
+                    }else{
+                        alert(plrname + ' が活動中です！');
+                    }
                 }
                 return true;
             }
