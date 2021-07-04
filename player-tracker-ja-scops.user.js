@@ -478,7 +478,7 @@ function wrapper(plugin_info) {
                 }else{
                     alert(playerData.nick + ' が活動中です！');
                 }
-                AgentsNoticed.add(playerData.nick);
+                AgentsNoticed.push(playerData.nick);
             }
 
             // tooltip for marker - no HTML - and not shown on touchscreen devices
