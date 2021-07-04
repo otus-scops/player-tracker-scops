@@ -6,7 +6,7 @@
 // @namespace      https://github.com/jonatkins/ingress-intel-total-conversion
 // @updateURL      https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
 // @downloadURL    https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
-// @description    [2021-07-04.0001] Notificatio APIへ対応
+// @description    [2021-07-04.0001] Notification APIへ対応
 // @include        https://*.ingress.com/intel*
 // @include        http://*.ingress.com/intel*
 // @match          https://*.ingress.com/intel*
@@ -42,6 +42,7 @@ function wrapper(plugin_info) {
     var PLAYER_TRACKER_SCOPS_STORAGE_KEY = 'player-tracer-scops-option';
     // オプション値
     var OptionData = { };
+    var AgentsNoticed = [];
 
 
     // use own namespace for plugin
@@ -354,16 +355,6 @@ function wrapper(plugin_info) {
                     team: json[2].plext.team,
                     events: [newEvent]
                 };
-                // 10分以内のイベント発生でポップとみなす
-                if(OptionData.surveillance.indexOf(plrname)>=0 && newEvent.time > (new Date()).getTime() - (PLAYER_TRACKER_ALERT_SURVEILANCE_MSEC)){
-                    if(('Notification' in window) && Notification.permission === 'granted'){
-                        new Notification(plrname + ' が活動中です！', {
-
-                        });
-                    }else{
-                        alert(plrname + ' が活動中です！');
-                    }
-                }
                 return true;
             }
 
@@ -471,11 +462,24 @@ function wrapper(plugin_info) {
                     polyLineByAgeRes[ageBucket].push(line);
                 else
                     polyLineByAgeEnl[ageBucket].push(line);
+
             }
 
             var evtsLength = playerData.events.length;
             var last = playerData.events[evtsLength-1];
             var ago = plugin.playerTracker.ago;
+
+            // PLAYER_TRACKER_ALERT_SURVEILANCE_MSEC[ms]以内のイベント発生でポップとみなす
+            if(OptionData.surveillance.indexOf(playerData.nick)>=0 && AgentsNoticed.indexOf(playerData.nick) === -1 && last.time > (new Date()).getTime() - (PLAYER_TRACKER_ALERT_SURVEILANCE_MSEC)){
+                if(('Notification' in window) && Notification.permission === 'granted'){
+                    new Notification(playerData.nick + ' が活動中です！', {
+
+                    });
+                }else{
+                    alert(playerData.nick + ' が活動中です！');
+                }
+                AgentsNoticed.add(playerData.nick);
+            }
 
             // tooltip for marker - no HTML - and not shown on touchscreen devices
             var tooltip = isTouchDev ? '' : (playerData.nick+', '+ago(last.time, now)+'前');
