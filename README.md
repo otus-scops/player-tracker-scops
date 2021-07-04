@@ -9,15 +9,11 @@
 さらに、以下の機能をotusscopsが追加実装したものです
 - 指定AGのログを直近10分以内に確認した場合、アラートを表示する
 
-## ToDo
-- アラートの表示をNotification APIに変更する
-- マーカーを変更する
-
 ## インストール
 [Plugin Download](https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js) <br>
 
 - あらかじめ、標準の「Plaert tracker」はOFFに設定してください。<br>
-![設定画面](fig1.png)<br>
+![設定画面](fig1-dialog.png)<br>
 - 上記「Plugin Download」リンクを選択し、開いた画面で「インストール」ボタンを押してください。<br>
 
 
@@ -33,5 +29,8 @@
 ## 設定画面
 「Player足跡」のメニューがツールボックスに追加されますので、それを選択して下さい。<br>
 この画面が表示されますので、選択して「OK」ボタンを押して下さい。<br>
+通知許可がない場合にのみ、「通知許可」ボタンが表示されます。<br>
+通知が許可されていない場合はalert window似て通知を行います。<br>
 
-![オプション](fig-option.png)
+
+![オプション](fig2-selection.png)
