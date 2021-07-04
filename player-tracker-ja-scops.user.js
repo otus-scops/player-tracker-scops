@@ -2,7 +2,7 @@
 // @id             iitc-plugin-player-tracker-scops@ja
 // @name           IITC-ja Plugin: Player Tracker(scops)
 // @category       Layer
-// @version        0.11.2.20210702.ja.scops.0001
+// @version        0.11.2.20210704.ja.scops.0001
 // @namespace      https://github.com/jonatkins/ingress-intel-total-conversion
 // @updateURL      https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
 // @downloadURL    https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
