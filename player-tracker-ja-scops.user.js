@@ -6,7 +6,7 @@
 // @namespace      https://github.com/jonatkins/ingress-intel-total-conversion
 // @updateURL      https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
 // @downloadURL    https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
-// @description    [2021-07-02.0001] PlayerTracker(scops) 指定プレイヤーのマーカーを変更.
+// @description    [2021-07-04.0001] Notificatio APIへ対応
 // @include        https://*.ingress.com/intel*
 // @include        http://*.ingress.com/intel*
 // @match          https://*.ingress.com/intel*
