@@ -9,6 +9,11 @@
 さらに、以下の機能をotusscopsが追加実装したものです
 - 指定AGのログを直近10分以内に確認した場合、アラートを表示する
 
+## ToDo
+- AG指定した後の再描画処理（現在はリロードが必要）
+- AGごとのアイコン変更
+- アラート表示時間を指定可能に？
+
 ## インストール
 [Plugin Download](https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js) <br>
 
