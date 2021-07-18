@@ -2,7 +2,7 @@
 // @id             iitc-plugin-player-tracker-scops@ja
 // @name           IITC-ja Plugin: Player Tracker(scops)
 // @category       Layer
-// @version        0.11.2.20210704.ja.scops.0001
+// @version        0.11.2.20210718.ja.scops.0001
 // @namespace      https://github.com/jonatkins/ingress-intel-total-conversion
 // @updateURL      https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
 // @downloadURL    https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
@@ -36,8 +36,10 @@ function wrapper(plugin_info) {
     window.PLAYER_TRACKER_MIN_ZOOM = 9;
     window.PLAYER_TRACKER_MIN_OPACITY = 0.3;
     window.PLAYER_TRACKER_ALERT_SURVEILANCE_MSEC = 10 * 60 * 1000; // in milliseconds
-    window.PLAYER_TRACKER_LINE_COLOUR_ENL = '#ff0080';
-    window.PLAYER_TRACKER_LINE_COLOUR_RES = '#50443c';
+    window.PLAYER_TRACKER_LINE_COLOUR_ENL = '#E8A50C';
+    window.PLAYER_TRACKER_LINE_COLOUR_RES = '#FF5F00';
+    window.PLAYER_TRACKER_LINE_COLOUR_SUR_ENL = '#FFF50D';
+    window.PLAYER_TRACKER_LINE_COLOUR_SUR_RES = '#D10DFF';
 
     var PLAYER_TRACKER_SCOPS_STORAGE_KEY = 'player-tracer-scops-option';
     // オプション値
@@ -200,6 +202,11 @@ function wrapper(plugin_info) {
                     OptionData.history =$('#player-tracker-scops-opt-history').val();
                     OptionData.surveillance = $('#player-tracker-scops-opt-surveillance-agents').val().split('\n');
                     window.plugin.playerTracker.saveOption();
+
+                    window.plugin.playerTracker.discardOldData();
+                    window.plugin.playerTracker.drawnTracesEnl.clearLayers();
+                    window.plugin.playerTracker.drawnTracesRes.clearLayers();
+                    window.plugin.playerTracker.drawData();
                     return true;
                 }
             });
@@ -440,6 +447,8 @@ function wrapper(plugin_info) {
 
         var polyLineByAgeEnl = [[], [], [], []];
         var polyLineByAgeRes = [[], [], [], []];
+        var polyLineByAgeSurEnl = [[], [], [], []];
+        var polyLineByAgeSurRes = [[], [], [], []];
 
         var split = (PLAYER_TRACKER_MAX_TIME * OptionData.priod) / 4;
         var now = new Date().getTime();
@@ -458,11 +467,19 @@ function wrapper(plugin_info) {
                 var ageBucket = Math.min(parseInt((now - p.time) / split), 4-1);
                 var line = [gllfe(p), gllfe(playerData.events[i-1])];
 
-                if(playerData.team === 'RESISTANCE')
-                    polyLineByAgeRes[ageBucket].push(line);
-                else
-                    polyLineByAgeEnl[ageBucket].push(line);
-
+                if(OptionData.surveillance.indexOf(playerData.nick) >= 0){
+                    if(playerData.team === 'RESISTANCE'){
+                        polyLineByAgeSurRes[ageBucket].push(line);
+                    }else{
+                        polyLineByAgeSurEnl[ageBucket].push(line);
+                    }
+                }else{
+                    if(playerData.team === 'RESISTANCE'){
+                        polyLineByAgeRes[ageBucket].push(line);
+                    }else{
+                        polyLineByAgeEnl[ageBucket].push(line);
+                    }
+                }
             }
 
             var evtsLength = playerData.events.length;
@@ -614,6 +631,36 @@ function wrapper(plugin_info) {
             var opts = {
                 weight: 2-0.25*i,
                 color: PLAYER_TRACKER_LINE_COLOUR_RES,
+                clickable: false,
+                opacity: 1-0.2*i,
+                dashArray: "5,8"
+            };
+
+            $.each(polyLine, function(ind,poly) {
+                L.polyline(poly, opts).addTo(plugin.playerTracker.drawnTracesRes);
+            });
+        });
+        $.each(polyLineByAgeSurEnl, function(i, polyLine) {
+            if(polyLine.length === 0) return true;
+
+            var opts = {
+                weight: 2-0.25*i,
+                color: PLAYER_TRACKER_LINE_COLOUR_SUR_ENL,
+                clickable: false,
+                opacity: 1-0.2*i,
+                dashArray: "5,8"
+            };
+
+            $.each(polyLine,function(ind,poly) {
+                L.polyline(poly, opts).addTo(plugin.playerTracker.drawnTracesEnl);
+            });
+        });
+        $.each(polyLineByAgeSurRes, function(i, polyLine) {
+            if(polyLine.length === 0) return true;
+
+            var opts = {
+                weight: 2-0.25*i,
+                color: PLAYER_TRACKER_LINE_COLOUR_SUR_RES,
                 clickable: false,
                 opacity: 1-0.2*i,
                 dashArray: "5,8"
