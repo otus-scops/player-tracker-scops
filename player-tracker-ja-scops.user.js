@@ -2,11 +2,11 @@
 // @id             iitc-plugin-player-tracker-scops@ja
 // @name           IITC-ja Plugin: Player Tracker(scops)
 // @category       Layer
-// @version        0.11.2.20210718.ja.scops.0001
+// @version        0.12.0.20230520.ja.scops.0001
 // @namespace      https://github.com/jonatkins/ingress-intel-total-conversion
 // @updateURL      https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
 // @downloadURL    https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
-// @description    [2021-07-04.0001] Notification APIへ対応
+// @description    [2023-05-20] 除外エージェント指定機能を追加
 // @include        https://*.ingress.com/intel*
 // @include        http://*.ingress.com/intel*
 // @match          https://*.ingress.com/intel*
@@ -102,12 +102,12 @@ function wrapper(plugin_info) {
         window.plugin.playerTracker.loadOption();
 
         //---- PANEL
-        //if (window.useAndroidPanes()) {
-        //    android.addPane('plugin-player-tracker-scops', 'Player足跡', 'ic_action_user');
-        //    addHook('paneChanged', window.plugin.playerTracker.onPaneChanged);
-        //} else {
+        if (window.useAndroidPanes()) {
+            android.addPane('plugin-player-tracker-scops', 'Player足跡', 'ic_action_user');
+            addHook('paneChanged', window.plugin.playerTracker.onPaneChanged);
+        } else {
             $('#toolbox').append('<a onclick="window.plugin.playerTracker.playerTrackerDialog();return false;">Player足跡</a>');
-        //}
+        }
 
         addHook('publicChatDataAvailable', window.plugin.playerTracker.handleData);
 
@@ -168,6 +168,15 @@ function wrapper(plugin_info) {
         html.append($('<textarea>', {
             id : 'player-tracker-scops-opt-surveillance-agents'
         }));
+        html.append($('<br />'));
+        html.append($('<label>' , {
+            class : 'info-text',
+            text : '除外エージェント設定:',
+            for : 'player-tracker-scops-opt-exclude-agents'
+        }));
+        html.append($('<textarea>', {
+            id : 'player-tracker-scops-opt-exclude-agents'
+        }));
         html.append($('<p>').text('※エージェントごとに改行で区切ってください'));
         if(('Notification' in window)){
             if(Notification.permission === 'denied' || Notification.permission === 'default') {
@@ -179,15 +188,17 @@ function wrapper(plugin_info) {
         }
 
 
-        //if (window.useAndroidPanes()) {
-        //     $('<div>' , {
-        //         id : 'playerTrackerDialog',
-        //         class : 'mobile'
-        //     }).append(html).appendTo(document.body);
-        //    $('#player-tracker-scops-opt-priod').val(OptionData.priod);
-        //    $('#player-tracker-scops-opt-history').val(OptionData.history);
-        //}
-        //else {
+        if (window.useAndroidPanes()) {
+             $('<div>' , {
+                 id : 'playerTrackerDialog',
+                 class : 'mobile'
+             }).append(html).appendTo(document.body);
+            $('#player-tracker-scops-opt-priod').val(OptionData.priod);
+            $('#player-tracker-scops-opt-history').val(OptionData.history);
+            $('#player-tracker-scops-opt-surveillance-agents').val(OptionData.surveillance.join('\n'));
+            $('#player-tracker-scops-opt-exclude-agents').val(OptionData.excluded.join('\n'));
+        }
+        else {
             dialog({
                 html: html,
                 id: 'playerTracker-options',
@@ -196,11 +207,13 @@ function wrapper(plugin_info) {
                     $('#player-tracker-scops-opt-priod').val(OptionData.priod);
                     $('#player-tracker-scops-opt-history').val(OptionData.history);
                     $('#player-tracker-scops-opt-surveillance-agents').val(OptionData.surveillance.join('\n'));
+                    $('#player-tracker-scops-opt-exclude-agents').val(OptionData.excluded.join('\n'));
                 },
                 closeCallback:function() {
                     OptionData.priod =$('#player-tracker-scops-opt-priod').val();
                     OptionData.history =$('#player-tracker-scops-opt-history').val();
                     OptionData.surveillance = $('#player-tracker-scops-opt-surveillance-agents').val().split('\n');
+                    OptionData.excluded = $('#player-tracker-scops-opt-exclude-agents').val().split('\n');
                     window.plugin.playerTracker.saveOption();
 
                     window.plugin.playerTracker.discardOldData();
@@ -210,7 +223,7 @@ function wrapper(plugin_info) {
                     return true;
                 }
             });
-        //}
+        }
     };
 
     //  オプション値をロード
@@ -226,9 +239,13 @@ function wrapper(plugin_info) {
         if (!!!_data.surveillance) {
             _data.surveillance = [];
         }
+        if (!!!_data.excluded) {
+            _data.excluded = [];
+        }
         OptionData.priod   = parseInt(_data.priod,10);
         OptionData.history = parseInt(_data.history,10);
         OptionData.surveillance = _data.surveillance;
+        OptionData.excluded = _data.excluded;
     };
     // オプション値を保存
     window.plugin.playerTracker.saveOption = function () {
@@ -357,6 +374,7 @@ function wrapper(plugin_info) {
 
             // short-path if this is a new player
             if(!playerData || playerData.events.length === 0) {
+                if(OptionData.excluded.includes(plrname)){ return true; }
                 plugin.playerTracker.stored[plrname] = {
                     nick: plrname,
                     team: json[2].plext.team,
@@ -575,8 +593,8 @@ function wrapper(plugin_info) {
             // marker opacity
             var relOpacity = 1 - (now - last.time) / (window.PLAYER_TRACKER_MAX_TIME * OptionData.priod);
             var absOpacity = window.PLAYER_TRACKER_MIN_OPACITY + (1 - window.PLAYER_TRACKER_MIN_OPACITY) * relOpacity;
-    
-            // marker itself                                                            
+
+            // marker itself
             var icon =
                 OptionData.surveillance.indexOf(playerData.nick) >= 0
                     ? playerData.team === "RESISTANCE"
