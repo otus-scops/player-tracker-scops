@@ -2,7 +2,7 @@
 // @id             iitc-plugin-player-tracker-scops@ja
 // @name           IITC-ja Plugin: Player Tracker(scops)
 // @category       Layer
-// @version        0.12.0.20230520.ja.scops.0001
+// @version        0.12.0.20231020.ja.scops.0001
 // @namespace      https://github.com/jonatkins/ingress-intel-total-conversion
 // @updateURL      https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
 // @downloadURL    https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
@@ -336,6 +336,8 @@ function wrapper(plugin_info) {
                         // portal the player is at, so ignore it.
                         if(markup[1].plain.indexOf('destroyed the Link') !== -1 ||
                            markup[1].plain.indexOf('destroyed a Control Field') !== -1 ||
+			   // COMM messages changed a bit, keep old rules ↑ in case of rollback
+                           markup[1].plain.indexOf('destroyed the') !== -1 ||
                            markup[1].plain.indexOf('Your Link') !== -1) {
                             skipThisMessage = true;
                             return false;
