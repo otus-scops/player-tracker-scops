@@ -3,7 +3,7 @@
 ## はじめに
 これは、[IITC-ja: Ingress Intel Total Conversion 日本語化版](https://ingress.love/iitc-ja/)を元に[NightHackzさん](https://github.com/NightHackzz/player-tracker-nhz)が以下の修正を加えたプラグインをもとに <br> 
 - AGのトレース破線色をRES/ENLで色分け
-- AGの追跡時間を1,3,6,12,24時間と指定可能にした
+- AGの追跡時間を3,6,12,24時間と指定可能にした
 - AGの履歴詳細画面の履歴数を指定可能にした
 
 さらに、以下の機能をotusscopsが追加実装したものです
@@ -11,7 +11,7 @@
 - NIASection14を専用レイヤーに切り分け
 - 追跡表示しないエージェントを指定可能
 - __MACHINA__を表示しないよう変更
-- 追跡時間に15分、30分を追加
+- 追跡時間に15分、30分、1時間を追加
 - 表示履歴数に2,3を追加
 
 ## ToDo
