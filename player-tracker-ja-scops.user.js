@@ -2,19 +2,15 @@
 // @id             iitc-plugin-player-tracker-scops@ja
 // @name           IITC-ja Plugin: Player Tracker(scops)
 // @category       Layer
-// @version        0.12.1.20231020.ja.scops.0001
+// @version        0.12.1.20240617.ja.scops.0001
 // @namespace      https://github.com/jonatkins/ingress-intel-total-conversion
 // @updateURL      https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
 // @downloadURL    https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
-// @description    [2023-10-20.0001] commの変更に対応
-// @include        https://*.ingress.com/intel*
-// @include        http://*.ingress.com/intel*
-// @match          https://*.ingress.com/intel*
-// @match          http://*.ingress.com/intel*
-// @include        https://*.ingress.com/mission/*
-// @include        http://*.ingress.com/mission/*
-// @match          https://*.ingress.com/mission/*
-// @match          http://*.ingress.com/mission/*
+// @description    Visualize player movement
+// @include        https://*.ingress.com/*
+// @include        http://*.ingress.com/*
+// @match          https://*.ingress.com/*
+// @match          http://*.ingress.com/*
 // @grant          none
 // ==/UserScript==
 
@@ -25,7 +21,7 @@ function wrapper(plugin_info) {
     //PLUGIN AUTHORS: writing a plugin outside of the IITC build environment? if so, delete these lines!!
     //(leaving them in place might break the 'About IITC' page or break update checks)
     plugin_info.buildName = 'iitc-ja-scops';
-    plugin_info.dateTimeVersion = '20210701.0001';
+    plugin_info.dateTimeVersion = '20240617.0001';
     plugin_info.pluginId = 'player-tracker-ja-scops';
     //END PLUGIN AUTHORS NOTE
 
@@ -47,6 +43,7 @@ function wrapper(plugin_info) {
     var OptionData = { };
     var AgentsNoticed = [];
     var NIAPlayerName = 'NIASection14';
+    var IgnorePlayerName = ['_̶̱̍_̴̳͉̆̈́M̷͔̤͒Ą̷̍C̴̼̕ͅH̶̹͕̼̾Ḭ̵̇̾̓N̵̺͕͒̀̍Ä̴̞̰́_̴̦̀͆̓_̷̣̈́ ', '__MACHINA__ '];
 
 
     // use own namespace for plugin
@@ -153,6 +150,8 @@ function wrapper(plugin_info) {
             value : 3 ,
             id : 'player-tracker-scops-opt-priod'
         }))
+        .append($('<option>').val(0.25).text("15分"))
+        .append($('<option>').val(0.5).text("30分"))
         .append($('<option>').val(1).text("1時間"))
         .append($('<option>').val(3).text("3時間"))
         .append($('<option>').val(6).text("6時間"))
@@ -169,6 +168,9 @@ function wrapper(plugin_info) {
             value : 6 ,
             id : 'player-tracker-scops-opt-history'
         }))
+        .append($('<option>').val(2).text("2履歴"))
+        .append($('<option>').val(3).text("3履歴"))
+        .append($('<option>').val(5).text("5履歴"))
         .append($('<option>').val(10).text("10履歴"))
         .append($('<option>').val(20).text("20履歴"));
         html.append(select_history);
@@ -222,19 +224,23 @@ function wrapper(plugin_info) {
                     $('#player-tracker-scops-opt-surveillance-agents').val(OptionData.surveillance.join('\n'));
                     $('#player-tracker-scops-opt-exclude-agents').val(OptionData.excluded.join('\n'));
                 },
-                closeCallback:function() {
-                    OptionData.priod =$('#player-tracker-scops-opt-priod').val();
-                    OptionData.history =$('#player-tracker-scops-opt-history').val();
-                    OptionData.surveillance = $('#player-tracker-scops-opt-surveillance-agents').val().split('\n');
-                    OptionData.excluded = $('#player-tracker-scops-opt-exclude-agents').val().split('\n');
-                    window.plugin.playerTracker.saveOption();
+                buttons: {
+                    'OK' : function() {
+                        OptionData.priod =$('#player-tracker-scops-opt-priod').val();
+                        OptionData.history =$('#player-tracker-scops-opt-history').val();
+                        OptionData.surveillance = $('#player-tracker-scops-opt-surveillance-agents').val().split('\n');
+                        OptionData.excluded = $('#player-tracker-scops-opt-exclude-agents').val().split('\n');
+                        window.plugin.playerTracker.saveOption();
 
-                    window.plugin.playerTracker.discardOldData();
-                    window.plugin.playerTracker.drawnTracesEnl.clearLayers();
-                    window.plugin.playerTracker.drawnTracesRes.clearLayers();
-                    window.plugin.playerTracker.drawnTracesNIA.clearLayers();
-                    window.plugin.playerTracker.drawData();
-                    return true;
+                        window.plugin.playerTracker.discardOldData();
+                        window.plugin.playerTracker.drawnTracesEnl.clearLayers();
+                        window.plugin.playerTracker.drawnTracesRes.clearLayers();
+                        window.plugin.playerTracker.drawnTracesNIA.clearLayers();
+                        window.plugin.playerTracker.drawData();
+
+                        $(this).dialog('close');
+                    },
+                    'Cancel':  function() { $(this).dialog('close'); }
                 }
             });
         }
@@ -256,7 +262,7 @@ function wrapper(plugin_info) {
         if (!!!_data.excluded) {
             _data.excluded = [];
         }
-        OptionData.priod   = parseInt(_data.priod,10);
+        OptionData.priod   = parseFloat(_data.priod,10);
         OptionData.history = parseInt(_data.history,10);
         OptionData.surveillance = _data.surveillance;
         OptionData.excluded = _data.excluded;
@@ -393,7 +399,10 @@ function wrapper(plugin_info) {
 
             // short-path if this is a new player
             if(!playerData || playerData.events.length === 0) {
+                // 除外設定ユーザー
                 if(OptionData.excluded.includes(plrname)){ return true; }
+                // システム除外ユーザー
+                if(IgnorePlayerName.includes(plrname)){ return true; }
                 plugin.playerTracker.stored[plrname] = {
                     nick: plrname,
                     team: json[2].plext.team,
