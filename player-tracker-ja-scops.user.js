@@ -394,7 +394,6 @@ function wrapper(plugin_info) {
                 name: name,
                 address: address
             };
-            console.log(plrname);
 
             var playerData = window.plugin.playerTracker.stored[plrname];
 
