@@ -2,7 +2,7 @@
 // @id             iitc-plugin-player-tracker-scops@ja
 // @name           IITC-ja Plugin: Player Tracker(scops)
 // @category       Layer
-// @version        0.12.1.20240617.ja.scops.0001
+// @version        0.12.1.20240619.ja.scops.0001
 // @namespace      https://github.com/jonatkins/ingress-intel-total-conversion
 // @updateURL      https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
 // @downloadURL    https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
@@ -21,7 +21,7 @@ function wrapper(plugin_info) {
     //PLUGIN AUTHORS: writing a plugin outside of the IITC build environment? if so, delete these lines!!
     //(leaving them in place might break the 'About IITC' page or break update checks)
     plugin_info.buildName = 'iitc-ja-scops';
-    plugin_info.dateTimeVersion = '20240617.0001';
+    plugin_info.dateTimeVersion = '20240619.0001';
     plugin_info.pluginId = 'player-tracker-ja-scops';
     //END PLUGIN AUTHORS NOTE
 
@@ -43,7 +43,7 @@ function wrapper(plugin_info) {
     var OptionData = { };
     var AgentsNoticed = [];
     var NIAPlayerName = 'NIASection14';
-    var IgnorePlayerName = ['_̶̱̍_̴̳͉̆̈́M̷͔̤͒Ą̷̍C̴̼̕ͅH̶̹͕̼̾Ḭ̵̇̾̓N̵̺͕͒̀̍Ä̴̞̰́_̴̦̀͆̓_̷̣̈́ ', '__MACHINA__ '];
+    var IgnorePlayerName = ['_̶̱̍_̴̳͉̆̈́M̷͔̤͒Ą̷̍C̴̼̕ͅH̶̹͕̼̾Ḭ̵̇̾̓N̵̺͕͒̀̍Ä̴̞̰́_̴̦̀͆̓_̷̣̈́', '__MACHINA__ '];
 
 
     // use own namespace for plugin
@@ -394,6 +394,7 @@ function wrapper(plugin_info) {
                 name: name,
                 address: address
             };
+            console.log(plrname);
 
             var playerData = window.plugin.playerTracker.stored[plrname];
 
