@@ -2,7 +2,7 @@
 // @id             iitc-plugin-player-tracker-scops@ja
 // @name           IITC-ja Plugin: Player Tracker(scops)
 // @category       Layer
-// @version        0.12.1.20240619.ja.scops.0001
+// @version        0.13.0.20240622.ja.scops.0001
 // @namespace      https://github.com/jonatkins/ingress-intel-total-conversion
 // @updateURL      https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
 // @downloadURL    https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
@@ -21,7 +21,7 @@ function wrapper(plugin_info) {
     //PLUGIN AUTHORS: writing a plugin outside of the IITC build environment? if so, delete these lines!!
     //(leaving them in place might break the 'About IITC' page or break update checks)
     plugin_info.buildName = 'iitc-ja-scops';
-    plugin_info.dateTimeVersion = '20240619.0001';
+    plugin_info.dateTimeVersion = '20240622.0001';
     plugin_info.pluginId = 'player-tracker-ja-scops';
     //END PLUGIN AUTHORS NOTE
 
@@ -43,7 +43,7 @@ function wrapper(plugin_info) {
     var OptionData = { };
     var AgentsNoticed = [];
     var NIAPlayerName = 'NIASection14';
-    var IgnorePlayerName = ['_̶̱̍_̴̳͉̆̈́M̷͔̤͒Ą̷̍C̴̼̕ͅH̶̹͕̼̾Ḭ̵̇̾̓N̵̺͕͒̀̍Ä̴̞̰́_̴̦̀͆̓_̷̣̈́', '__MACHINA__ '];
+    var IgnorePlayerName = []; // システム除外ユーザー
 
 
     // use own namespace for plugin
@@ -320,7 +320,8 @@ function wrapper(plugin_info) {
 
     window.plugin.playerTracker.discardOldData = function() {
         var limit = plugin.playerTracker.getLimit();
-        $.each(plugin.playerTracker.stored, function(plrname, player) {
+        Object.keys(plugin.playerTracker.stored).forEach(function(plrname){
+            let player = plugin.playerTracker.stored[plrname];
             var i;
             var ev = player.events;
             for(i = 0; i < ev.length; i++) {
@@ -334,7 +335,7 @@ function wrapper(plugin_info) {
 
     window.plugin.playerTracker.eventHasLatLng = function(ev, lat, lng) {
         var hasLatLng = false;
-        $.each(ev.latlngs, function(ind, ll) {
+        ev.latlngs.forEach(function(ll) {
             if(ll[0] === lat && ll[1] === lng) {
                 hasLatLng = true;
                 return false;
@@ -345,14 +346,14 @@ function wrapper(plugin_info) {
 
     window.plugin.playerTracker.processNewData = function(data) {
         var limit = plugin.playerTracker.getLimit();
-        $.each(data.result, function(ind, json) {
+        data.result.forEach(function(json) {
             // skip old data
             if(json[1] < limit) return true;
 
             // find player and portal information
-            var plrname, lat, lng, id=null, name, address;
+            var plrname, plrteam, lat, lng, id=null, name, address;
             var skipThisMessage = false;
-            $.each(json[2].plext.markup, function(ind, markup) {
+            json[2].plext.markup.forEach(function(markup) {
                 switch(markup[0]) {
                     case 'TEXT':
                         // Destroy link and field messages depend on where the link or
@@ -368,6 +369,7 @@ function wrapper(plugin_info) {
                         break;
                     case 'PLAYER':
                         plrname = markup[1].plain;
+                        plrteam = markup[1].team;
                         break;
                     case 'PORTAL':
                         // link messages are “player linked X to Y” and the player is at
@@ -385,7 +387,8 @@ function wrapper(plugin_info) {
             });
 
             // skip unusable events
-            if(!plrname || !lat || !lng || !id || skipThisMessage) return true;
+            // MACHINA team is NUTRAL
+            if(!plrname || !lat || !lng || !id || skipThisMessage || ![window.TEAM_RES, window.TEAM_ENL].includes(window.teamStringToId(plrteam))) return true;
 
             var newEvent = {
                 latlngs: [[lat, lng]],
@@ -405,7 +408,7 @@ function wrapper(plugin_info) {
                 if(IgnorePlayerName.includes(plrname)){ return true; }
                 plugin.playerTracker.stored[plrname] = {
                     nick: plrname,
-                    team: json[2].plext.team,
+                    team: plrteam,
                     events: [newEvent]
                 };
                 return true;
@@ -458,7 +461,7 @@ function wrapper(plugin_info) {
         //TODO? add weight to certain events, or otherwise prefer them, to give better locations?
         var lats = 0;
         var lngs = 0;
-        $.each(ev.latlngs, function(i, latlng) {
+        ev.latlngs.forEach(function(latlng) {
             lats += latlng[0];
             lngs += latlng[1];
         });
@@ -499,7 +502,8 @@ function wrapper(plugin_info) {
 
         var split = (PLAYER_TRACKER_MAX_TIME * OptionData.priod) / 4;
         var now = new Date().getTime();
-        $.each(plugin.playerTracker.stored, function(plrname, playerData) {
+        Object.keys(plugin.playerTracker.stored).forEach(function(plrname){
+            let playerData = plugin.playerTracker.stored[plrname];
             if(!playerData || playerData.events.length === 0) {
                 console.warn('broken player data for plrname=' + plrname);
                 return true;
@@ -609,7 +613,7 @@ function wrapper(plugin_info) {
             var eventPortal = [];
             var closestPortal;
             var mostPortals = 0;
-            $.each(last.ids, function(i, id) {
+            last.ids.forEach(function(id) {
                 if(eventPortal[id]) {
                     eventPortal[id]++;
                 } else {
@@ -668,7 +672,7 @@ function wrapper(plugin_info) {
         });
 
         // draw the poly lines to the map
-        $.each(polyLineByAgeNIA, function(i, polyLine) {
+        polyLineByAgeNIA.forEach(function(polyLine, i) {
             if(polyLine.length === 0) return true;
 
             var opts = {
@@ -679,11 +683,11 @@ function wrapper(plugin_info) {
                 dashArray: "5,8"
             };
 
-            $.each(polyLine,function(ind,poly) {
+            polyLine.forEach(function(poly) {
                 L.polyline(poly, opts).addTo(plugin.playerTracker.drawnTracesNIA);
             });
         });
-        $.each(polyLineByAgeEnl, function(i, polyLine) {
+        polyLineByAgeEnl.forEach(function(polyLine, i) {
             if(polyLine.length === 0) return true;
 
             var opts = {
@@ -694,11 +698,11 @@ function wrapper(plugin_info) {
                 dashArray: "5,8"
             };
 
-            $.each(polyLine,function(ind,poly) {
+            polyLine.forEach(function(poly) {
                 L.polyline(poly, opts).addTo(plugin.playerTracker.drawnTracesEnl);
             });
         });
-        $.each(polyLineByAgeRes, function(i, polyLine) {
+        polyLineByAgeRes.forEach(function(polyLine, i) {
             if(polyLine.length === 0) return true;
 
             var opts = {
@@ -709,11 +713,11 @@ function wrapper(plugin_info) {
                 dashArray: "5,8"
             };
 
-            $.each(polyLine, function(ind,poly) {
+            polyLine.forEach(function(poly) {
                 L.polyline(poly, opts).addTo(plugin.playerTracker.drawnTracesRes);
             });
         });
-        $.each(polyLineByAgeSurEnl, function(i, polyLine) {
+        polyLineByAgeSurEnl.forEach(function(polyLine, i) {
             if(polyLine.length === 0) return true;
 
             var opts = {
@@ -724,11 +728,11 @@ function wrapper(plugin_info) {
                 dashArray: "5,8"
             };
 
-            $.each(polyLine,function(ind,poly) {
+            polyLine.forEach(function(poly) {
                 L.polyline(poly, opts).addTo(plugin.playerTracker.drawnTracesEnl);
             });
         });
-        $.each(polyLineByAgeSurRes, function(i, polyLine) {
+        polyLineByAgeSurRes.forEach(function(polyLine, i) {
             if(polyLine.length === 0) return true;
 
             var opts = {
@@ -739,7 +743,7 @@ function wrapper(plugin_info) {
                 dashArray: "5,8"
             };
 
-            $.each(polyLine, function(ind,poly) {
+            polyLine.forEach(function(poly) {
                 L.polyline(poly, opts).addTo(plugin.playerTracker.drawnTracesRes);
             });
         });
@@ -785,7 +789,8 @@ function wrapper(plugin_info) {
     window.plugin.playerTracker.findUser = function(nick) {
         nick = nick.toLowerCase();
         var foundPlayerData = false;
-        $.each(plugin.playerTracker.stored, function(plrname, playerData) {
+        Object.keys(plugin.playerTracker.stored).forEach(function(plrname){
+            let playerData = plugin.playerTracker.stored[plrname];
             if (playerData.nick.toLowerCase() === nick) {
                 foundPlayerData = playerData;
                 return false;
@@ -845,7 +850,8 @@ function wrapper(plugin_info) {
 
         if (term.length && term[0] == '@') term = term.substr(1);
 
-        $.each(plugin.playerTracker.stored, function(nick, data) {
+        Object.keys(plugin.playerTracker.stored).forEach(function(nick){
+            let data = plugin.playerTracker.stored[nick];
             if(nick.toLowerCase().indexOf(term) === -1) return;
 
             var event = data.events[data.events.length - 1];
