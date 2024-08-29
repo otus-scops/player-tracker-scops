@@ -2,7 +2,7 @@
 // @author         otusscops
 // @name           IITC plugin: Player activity tracker (otusscops)
 // @category       Layer
-// @version        0.13.0.202408290900
+// @version        0.13.0.202408291345
 // @description    Draw trails for the path a user took onto the map based on status messages in COMMs. Uses up to three hours of data. Does not request chat data on its own, even if that would be useful.
 // @id             player-activity-tracker-scops
 // @namespace      https://github.com/IITC-CE/ingress-intel-total-conversion
@@ -16,17 +16,17 @@
 function wrapper(plugin_info) {
     // ensure plugin framework is there, even if iitc is not yet loaded
     if(typeof window.plugin !== 'function') window.plugin = function() {};
-    
+
     //PLUGIN AUTHORS: writing a plugin outside of the IITC build environment? if so, delete these lines!!
     //(leaving them in place might break the 'About IITC' page or break update checks)
     plugin_info.buildName = 'release';
-    plugin_info.dateTimeVersion = '202408290900';
+    plugin_info.dateTimeVersion = '202408291345';
     plugin_info.pluginId = 'player-activity-tracker-scops';
     //END PLUGIN AUTHORS NOTE
-    
+
     /* exported setup, changelog --eslint */
     /* global L -- eslint */
-    
+
     let changelog = [
         {
             version: '0.13.0',
@@ -41,7 +41,7 @@ function wrapper(plugin_info) {
             changes: ['🐛 - Exclude __MACHINA__ actions'],
         },
     ];
-    
+
     window.PLAYER_TRACKER_MAX_TIME = 60*60*1000; // in milliseconds
     window.PLAYER_TRACKER_MIN_ZOOM = 9;
     window.PLAYER_TRACKER_MIN_OPACITY = 0.3;
@@ -56,11 +56,11 @@ function wrapper(plugin_info) {
     let OptionData = { };
     let AgentsNoticed = [];
     let NIAPlayerName = ['NIASection14'];
-    
-    
+
+
     // use own namespace for plugin
     window.plugin.playerTracker = function() {};
-    
+
     window.plugin.playerTracker.setup = function() {
         $('<style>').prop('type', 'text/css').html('\
             .plugin-player-tracker-popup a {\
@@ -104,7 +104,7 @@ function wrapper(plugin_info) {
             iconUrl: iconNIAImage,
             iconRetinaUrl: iconNIARetImage,
         }});
-        
+
         plugin.playerTracker.drawnTracesEnl = new L.LayerGroup();
         plugin.playerTracker.drawnTracesRes = new L.LayerGroup();
         plugin.playerTracker.drawnTracesNIA = new L.LayerGroup();
@@ -125,7 +125,7 @@ function wrapper(plugin_info) {
                 });
             }
         });
-        
+
         plugin.playerTracker.playerPopup = new L.Popup({offset: L.point([1,-34])});
 
         // オプション値読み込み
@@ -138,14 +138,14 @@ function wrapper(plugin_info) {
         } else {
             $('#toolbox').append('<a onclick="window.plugin.playerTracker.playerTrackerDialog();return false;">Player足跡</a>');
         }
-        
+
         addHook('publicChatDataAvailable', window.plugin.playerTracker.handleData);
-        
+
         window.map.on('zoomend', function() {
             window.plugin.playerTracker.zoomListener();
         });
         window.plugin.playerTracker.zoomListener();
-        
+
         plugin.playerTracker.setupUserSearch();
     }
 
@@ -293,19 +293,19 @@ function wrapper(plugin_info) {
         let stream = JSON.stringify(OptionData);
         localStorage.setItem(PLAYER_TRACKER_SCOPS_STORAGE_KEY,stream);
     };
-    
+
     window.plugin.playerTracker.stored = {};
-    
+
     plugin.playerTracker.onClickListener = function(event) {
         let marker = event.target;
-        
+
         if (marker.options.desc) {
             plugin.playerTracker.playerPopup.setContent(marker.options.desc);
             plugin.playerTracker.playerPopup.setLatLng(marker.getLatLng());
             map.openPopup(plugin.playerTracker.playerPopup);
         }
     };
-    
+
     // force close all open tooltips before markers are cleared
     window.plugin.playerTracker.closeIconTooltips = function() {
         plugin.playerTracker.drawnTracesRes.eachLayer(function(layer) {
@@ -318,7 +318,7 @@ function wrapper(plugin_info) {
             if ($(layer._icon)) { $(layer._icon).tooltip('close');}
         });
     }
-    
+
     window.plugin.playerTracker.zoomListener = function() {
         let ctrl = $('.leaflet-control-layers-selector + span:contains("Player Tracker")').parent();
         if(window.map.getZoom() < window.PLAYER_TRACKER_MIN_ZOOM) {
@@ -335,14 +335,15 @@ function wrapper(plugin_info) {
             window.chat.backgroundChannelData('plugin.playerTracker', 'all', true);    //enable this plugin's interest in 'all' COMM
         }
     }
-    
+
     window.plugin.playerTracker.getLimit = function() {
         return Date.now() - window.PLAYER_TRACKER_MAX_TIME * OptionData.priod;
     }
-    
+
     window.plugin.playerTracker.discardOldData = function() {
         let limit = plugin.playerTracker.getLimit();
-        $.each(plugin.playerTracker.stored, function(plrname, player) {
+        Object.keys(plugin.playerTracker.stored).forEach(function(plrname){
+            let player = plugin.playerTracker.stored[plrname];
             let i;
             let ev = player.events;
             for(i = 0; i < ev.length; i++) {
@@ -353,10 +354,10 @@ function wrapper(plugin_info) {
             plugin.playerTracker.stored[plrname].events.splice(0, i);
         });
     }
-    
+
     window.plugin.playerTracker.eventHasLatLng = function(ev, lat, lng) {
         let hasLatLng = false;
-        $.each(ev.latlngs, function(ind, ll) {
+        ev.latlngs.forEach(function(ll) {
             if(ll[0] === lat && ll[1] === lng) {
             hasLatLng = true;
             return false;
@@ -364,13 +365,13 @@ function wrapper(plugin_info) {
         });
         return hasLatLng;
     }
-    
+
     window.plugin.playerTracker.processNewData = function(data) {
         let limit = plugin.playerTracker.getLimit();
         data.result.forEach(function(json) {
             // skip old data
             if(json[1] < limit) return true;
-        
+
             // find player and portal information
             let plrname,
             plrteam,
@@ -405,13 +406,13 @@ function wrapper(plugin_info) {
                         // X.
                         lat = lat ? lat : markup[1].latE6/1E6;
                         lng = lng ? lng : markup[1].lngE6/1E6;
-                
+
                         name = name ? name : markup[1].name;
                         address = address ? address : markup[1].address;
                         break;
                 }
             });
-        
+
             // skip unusable events
             // MACHINA team is NUTRAL
             if (!plrname || !lat || !lng || skipThisMessage || ![window.TEAM_RES, window.TEAM_ENL].includes(window.teamStringToId(plrteam))) {
@@ -421,16 +422,16 @@ function wrapper(plugin_info) {
             if(OptionData.excluded.includes(plrname)){
                 return true;
             }
-        
+
             let newEvent = {
                 latlngs: [[lat, lng]],
                 time: json[1],
                 name: name,
                 address: address
             };
-        
+
             let playerData = window.plugin.playerTracker.stored[plrname];
-        
+
             // short-path if this is a new player
             if(!playerData || playerData.events.length === 0) {
                 plugin.playerTracker.stored[plrname] = {
@@ -439,7 +440,7 @@ function wrapper(plugin_info) {
                 };
                 return true;
             }
-        
+
             let evts = playerData.events;
             // there’s some data already. Need to find correct place to insert.
             let i;
@@ -447,26 +448,26 @@ function wrapper(plugin_info) {
                 if(evts[i].time > json[1]) break;
             }
             let cmp = Math.max(i-1, 0);
-        
+
             // so we have an event that happened at the same time. Most likely
             // this is multiple resos destroyed at the same time.
             if(evts[cmp].time === json[1]) {
                 evts[cmp].latlngs.push([lat, lng]);
                 return true;
             }
-        
+
             // the time changed. Is the player still at the same location?
-        
+
             // assume this is an older event at the same location. Then we need
             // to look at the next item in the event list. If this event is the
             // newest one, there may not be a newer event so check for that. If
             // it really is an older event at the same location, then skip it.
             if(evts[cmp+1] && plugin.playerTracker.eventHasLatLng(evts[cmp+1], lat, lng))
                 return true;
-        
+
             // if this event is newer, need to look at the previous one
             let sameLocation = plugin.playerTracker.eventHasLatLng(evts[cmp], lat, lng);
-        
+
             // if it’s the same location, just update the timestamp. Otherwise
             // push as new event.
             if(sameLocation) {
@@ -474,22 +475,22 @@ function wrapper(plugin_info) {
             } else {
                 evts.splice(i, 0,  newEvent);
             }
-        
+
         });
     }
-    
+
     window.plugin.playerTracker.getLatLngFromEvent = function(ev) {
         //TODO? add weight to certain events, or otherwise prefer them, to give better locations?
         let lats = 0;
         let lngs = 0;
-        $.each(ev.latlngs, function(i, latlng) {
+        ev.latlngs.forEach(function(latlng) {
             lats += latlng[0];
             lngs += latlng[1];
         });
-        
+
         return L.latLng(lats / ev.latlngs.length, lngs / ev.latlngs.length);
     }
-    
+
     window.plugin.playerTracker.ago = function(time, now) {
         let s = (now-time) / 1000;
         let h = Math.floor(s / 3600);
@@ -500,18 +501,18 @@ function wrapper(plugin_info) {
         }
         return returnVal;
     }
-    
+
     window.plugin.playerTracker.drawData = function() {
         let isTouchDev = window.isTouchDevice();
-        
+
         let gllfe = plugin.playerTracker.getLatLngFromEvent;
-        
+
         let polyLineByAgeEnl = [[], [], [], []];
         let polyLineByAgeRes = [[], [], [], []];
         let polyLineByAgeNIA = [[], [], [], []];
         let polyLineByAgeSurEnl = [[], [], [], []];
         let polyLineByAgeSurRes = [[], [], [], []];
-        
+
         let split = (PLAYER_TRACKER_MAX_TIME * OptionData.priod) / 4;
         let now = Date.now();
         Object.keys(plugin.playerTracker.stored).forEach(function(plrname){
@@ -520,14 +521,14 @@ function wrapper(plugin_info) {
                 console.warn('broken player data for plrname=' + plrname);
                 return true;
             }
-        
+
             // gather line data and put them in buckets so we can color them by
             // their age
             for(let i = 1; i < playerData.events.length; i++) {
                 let p = playerData.events[i];
                 let ageBucket = Math.min(parseInt((now - p.time) / split), 4-1);
                 let line = [gllfe(p), gllfe(playerData.events[i-1])];
-                
+
 
                 if(NIAPlayerName.includes(playerData.nick)){
                     polyLineByAgeNIA[ageBucket].push(line);
@@ -545,7 +546,7 @@ function wrapper(plugin_info) {
                     }
                 }
             }
-            
+
             let evtsLength = playerData.events.length;
             let last = playerData.events[evtsLength-1];
             let ago = plugin.playerTracker.ago;
@@ -561,10 +562,10 @@ function wrapper(plugin_info) {
                 }
                 AgentsNoticed.push(playerData.nick);
             }
-        
+
             // tooltip for marker - no HTML - and not shown on touchscreen devices
             let tooltip = isTouchDev ? '' : plrname + ', ' + ago(last.time, now) + ' 前';
-        
+
             // popup for marker
             let popup = $('<div>')
             .addClass('plugin-player-tracker-popup');
@@ -573,7 +574,7 @@ function wrapper(plugin_info) {
             .css('font-weight', 'bold')
             .text(plrname)
             .appendTo(popup);
-        
+
             if(window.plugin.guessPlayerLevels !== undefined &&
                 window.plugin.guessPlayerLevels.fetchLevelDetailsByPlayer !== undefined) {
                 function getLevel(lvl) {
@@ -585,11 +586,11 @@ function wrapper(plugin_info) {
                     })
                     .text(lvl);
                 }
-            
+
                 let level = $('<span>')
                     .css({'font-weight': 'bold', 'margin-left': '10px'})
                     .appendTo(popup);
-            
+
                 let playerLevelDetails = window.plugin.guessPlayerLevels.fetchLevelDetailsByPlayer(plrname);
                 level
                     .text('Min level ')
@@ -599,13 +600,13 @@ function wrapper(plugin_info) {
                     .append(document.createTextNode(', guessed level: '))
                     .append(getLevel(playerLevelDetails.guessed));
             }
-        
+
             popup
                 .append('<br>')
                 .append(document.createTextNode(ago(last.time, now) + '前'))
                 .append('<br>')
                 .append(plugin.playerTracker.getPortalLink(last));
-        
+
             // show previous data in popup
             if(evtsLength >= 2) {
                 popup
@@ -613,7 +614,7 @@ function wrapper(plugin_info) {
                     .append('<br>')
                     .append(document.createTextNode('位置履歴:'))
                     .append('<br>');
-            
+
                 let table = $('<table>')
                     .appendTo(popup)
                     .css('border-spacing', '0');
@@ -627,11 +628,11 @@ function wrapper(plugin_info) {
                     .appendTo(table);
                 }
             }
-        
+
             // marker opacity
             let relOpacity = 1 - (now - last.time) / (window.PLAYER_TRACKER_MAX_TIME * OptionData.priod)
             let absOpacity = window.PLAYER_TRACKER_MIN_OPACITY + (1 - window.PLAYER_TRACKER_MIN_OPACITY) * relOpacity;
-        
+
             // marker itself
             //let icon = playerData.team === 'RESISTANCE' ?  new plugin.playerTracker.iconRes() :  new plugin.playerTracker.iconEnl();
             let icon;
@@ -651,16 +652,16 @@ function wrapper(plugin_info) {
             // marker click events. so store the popup text in the options, then display it in the oms click handler
             let m = L.marker(gllfe(last), { icon: icon, opacity: absOpacity, desc: popup[0], title: tooltip });
             m.addEventListener('spiderfiedclick', plugin.playerTracker.onClickListener);
-        
+
             // m.bindPopup(title);
-        
+
             if (tooltip) {
                 // ensure tooltips are closed, sometimes they linger
                 m.on('mouseout', function() { $(this._icon).tooltip('close'); });
             }
-        
+
             playerData.marker = m;
-        
+
             //m.addTo(playerData.team === 'RESISTANCE' ? plugin.playerTracker.drawnTracesRes : plugin.playerTracker.drawnTracesEnl);
             if(NIAPlayerName.includes(playerData.nick)){
                 m.addTo(plugin.playerTracker.drawnTracesNIA);
@@ -668,13 +669,13 @@ function wrapper(plugin_info) {
                 m.addTo(playerData.team === 'RESISTANCE' ? plugin.playerTracker.drawnTracesRes : plugin.playerTracker.drawnTracesEnl);
             }
             window.registerMarkerForOMS(m);
-        
+
             // jQueryUI doesn’t automatically notice the new markers
             if (!isTouchDev) {
                 window.setupTooltips($(m._icon));
             }
         });
-        
+
         // draw the poly lines to the map
         polyLineByAgeNIA.forEach(function(polyLine, i) {
             if(polyLine.length === 0) return true;
@@ -691,9 +692,9 @@ function wrapper(plugin_info) {
                 L.polyline(poly, opts).addTo(plugin.playerTracker.drawnTracesNIA);
             });
         });
-        $.each(polyLineByAgeEnl, function(i, polyLine) {
+        polyLineByAgeEnl.forEach(function(polyLine, i) {
             if(polyLine.length === 0) return true;
-        
+
             let opts = {
                 weight: 2-0.25*i,
                 color: PLAYER_TRACKER_LINE_COLOUR_ENL,
@@ -701,14 +702,14 @@ function wrapper(plugin_info) {
                 opacity: 1-0.2*i,
                 dashArray: "5,8"
             };
-        
+
             polyLine.forEach(function(poly) {
                 L.polyline(poly, opts).addTo(plugin.playerTracker.drawnTracesEnl);
             });
         });
-        $.each(polyLineByAgeRes, function(i, polyLine) {
+        polyLineByAgeRes.forEach(function(polyLine, i) {
             if(polyLine.length === 0) return true;
-        
+
             let opts = {
                 weight: 2-0.25*i,
                 color: PLAYER_TRACKER_LINE_COLOUR_RES,
@@ -716,7 +717,7 @@ function wrapper(plugin_info) {
                 opacity: 1-0.2*i,
                 dashArray: "5,8"
             };
-        
+
             polyLine.forEach(function(poly) {
                 L.polyline(poly, opts).addTo(plugin.playerTracker.drawnTracesRes);
             });
@@ -752,7 +753,7 @@ function wrapper(plugin_info) {
             });
         });
     }
-    
+
     window.plugin.playerTracker.getPortalLink = function(data) {
         let position = data.latlngs[0];
         return $('<a>')
@@ -775,24 +776,25 @@ function wrapper(plugin_info) {
             return false;
             });
     }
-    
+
     window.plugin.playerTracker.handleData = function(data) {
         if(window.map.getZoom() < window.PLAYER_TRACKER_MIN_ZOOM) return;
-        
+
         plugin.playerTracker.discardOldData();
         plugin.playerTracker.processNewData(data);
         if (!window.isTouchDevice()) plugin.playerTracker.closeIconTooltips();
-        
+
         plugin.playerTracker.drawnTracesEnl.clearLayers();
         plugin.playerTracker.drawnTracesRes.clearLayers();
         plugin.playerTracker.drawnTracesNIA.clearLayers();
         plugin.playerTracker.drawData();
     }
-    
+
     window.plugin.playerTracker.findUser = function(nick) {
         nick = nick.toLowerCase();
         let foundPlayerData = false;
-        $.each(plugin.playerTracker.stored, function(plrname, playerData) {
+        Object.keys(plugin.playerTracker.stored).forEach(function(plrname){
+            let playerData = plugin.playerTracker.stored[plrname];
             if (plrname.toLowerCase() === nick) {
             foundPlayerData = playerData;
             return false;
@@ -800,60 +802,61 @@ function wrapper(plugin_info) {
         });
         return foundPlayerData;
     }
-    
+
     window.plugin.playerTracker.centerMapOnUser = function(nick) {
         let data = plugin.playerTracker.findUser(nick);
         if(!data) return false;
-        
+
         let last = data.events[data.events.length - 1];
         let position = plugin.playerTracker.getLatLngFromEvent(last);
-        
+
         if(window.isSmartphone()) window.show('map');
         window.map.setView(position, map.getZoom());
-        
+
         if(data.marker) {
             window.plugin.playerTracker.onClickListener({target: data.marker});
         }
         return true;
     }
-    
+
     window.plugin.playerTracker.onNicknameClicked = function(info) {
         if (info.event.ctrlKey || info.event.metaKey) {
             return !plugin.playerTracker.centerMapOnUser(info.nickname);
         }
         return true; // don't interrupt hook
     }
-    
+
     window.plugin.playerTracker.onSearchResultSelected = function(result, event) {
         event.stopPropagation(); // prevent chat from handling the click
-        
+
         if(window.isSmartphone()) window.show('map');
-        
+
         // if the user moved since the search was started, check if we have a new set of data
         if(false === window.plugin.playerTracker.centerMapOnUser(result.nickname))
             map.setView(result.position);
-        
+
         if(event.type == 'dblclick')
             map.setZoom(DEFAULT_ZOOM);
-        
+
         return true;
     };
-    
+
     window.plugin.playerTracker.locale = navigator.languages;
-    
+
     window.plugin.playerTracker.dateTimeFormat = {
     };
-    
+
     window.plugin.playerTracker.onSearch = function(query) {
         let term = query.term.toLowerCase();
-        
+
         if (term.length && term[0] == '@') term = term.substr(1);
-        
-        $.each(plugin.playerTracker.stored, function(nick, data) {
+
+        Object.keys(plugin.playerTracker.stored).forEach(function(nick){
+            let data = plugin.playerTracker.stored[nick];
             if(nick.toLowerCase().indexOf(term) === -1) return;
-        
+
             let event = data.events[data.events.length - 1];
-        
+
             query.addResult({
             title: '<mark class="nickname help '+TEAM_TO_CSS[getTeam(data)]+'">' + nick + '</mark>',
             nickname: nick,
@@ -864,15 +867,15 @@ function wrapper(plugin_info) {
             });
         });
     }
-    
+
     window.plugin.playerTracker.setupUserSearch = function() {
         addHook('nicknameClicked', window.plugin.playerTracker.onNicknameClicked);
         addHook('search', window.plugin.playerTracker.onSearch);
     }
-    
-    
+
+
     let setup = plugin.playerTracker.setup;
-    
+
     setup.info = plugin_info; //add the script info data to the function as a property
     if (typeof changelog !== 'undefined') setup.info.changelog = changelog;
     if(!window.bootPlugins) window.bootPlugins = [];
@@ -886,5 +889,4 @@ var info = {};
 if (typeof GM_info !== 'undefined' && GM_info && GM_info.script) info.script = { version: GM_info.script.version, name: GM_info.script.name, description: GM_info.script.description };
 script.appendChild(document.createTextNode('('+ wrapper +')('+JSON.stringify(info)+');'));
 (document.body || document.head || document.documentElement).appendChild(script);
-    
-    
+
