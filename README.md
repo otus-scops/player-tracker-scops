@@ -22,7 +22,7 @@
 - アラート表示時間を指定可能に？
 
 ## インストール
-[Plugin Download](https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js) <br>
+[Plugin Download](https://github.com/otus-scops/player-tracker-scops/raw/master/iitc-plugin-player-activity-tracker-scops.user.js) <br>
 
 - あらかじめ、標準の「Player tracker」はOFFに設定してください。<br>
 ![設定画面](fig1-selection.png)<br>
