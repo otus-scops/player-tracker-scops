@@ -2,7 +2,7 @@
 // @author         otusscops
 // @name           IITC plugin: Player activity tracker (otusscops)
 // @category       Layer
-// @version        0.13.0.202408291345
+// @version        0.13.0.202410151310
 // @description    Draw trails for the path a user took onto the map based on status messages in COMMs. Uses up to three hours of data. Does not request chat data on its own, even if that would be useful.
 // @id             player-activity-tracker-scops
 // @namespace      https://github.com/IITC-CE/ingress-intel-total-conversion
@@ -103,6 +103,7 @@ function wrapper(plugin_info) {
         plugin.playerTracker.iconNIA = L.Icon.Default.extend({options: {
             iconUrl: iconNIAImage,
             iconRetinaUrl: iconNIARetImage,
+            iconSize: [25,35],
         }});
 
         plugin.playerTracker.drawnTracesEnl = new L.LayerGroup();
@@ -530,9 +531,9 @@ function wrapper(plugin_info) {
                 let line = [gllfe(p), gllfe(playerData.events[i-1])];
 
 
-                if(NIAPlayerName.includes(playerData.nick)){
+                if(NIAPlayerName.includes(plrname)){
                     polyLineByAgeNIA[ageBucket].push(line);
-                }else if(OptionData.surveillance.indexOf(playerData.nick) >= 0){
+                }else if(OptionData.surveillance.indexOf(plrname) >= 0){
                     if(playerData.team === 'RESISTANCE'){
                         polyLineByAgeSurRes[ageBucket].push(line);
                     }else{
@@ -552,15 +553,15 @@ function wrapper(plugin_info) {
             let ago = plugin.playerTracker.ago;
 
             // PLAYER_TRACKER_ALERT_SURVEILANCE_MSEC[ms]以内のイベント発生でポップとみなす
-            if(OptionData.surveillance.indexOf(playerData.nick)>=0 && AgentsNoticed.indexOf(playerData.nick) === -1 && last.time > (new Date()).getTime() - (PLAYER_TRACKER_ALERT_SURVEILANCE_MSEC)){
+            if(OptionData.surveillance.indexOf(plrname)>=0 && AgentsNoticed.indexOf(plrname) === -1 && last.time > (new Date()).getTime() - (PLAYER_TRACKER_ALERT_SURVEILANCE_MSEC)){
                 if(('Notification' in window) && Notification.permission === 'granted'){
-                    new Notification(playerData.nick + ' が活動中です！', {
+                    new Notification(plrname + ' が活動中です！', {
 
                     });
                 }else{
-                    alert(playerData.nick + ' が活動中です！');
+                    alert(plrname + ' が活動中です！');
                 }
-                AgentsNoticed.push(playerData.nick);
+                AgentsNoticed.push(plrname);
             }
 
             // tooltip for marker - no HTML - and not shown on touchscreen devices
@@ -636,11 +637,11 @@ function wrapper(plugin_info) {
             // marker itself
             //let icon = playerData.team === 'RESISTANCE' ?  new plugin.playerTracker.iconRes() :  new plugin.playerTracker.iconEnl();
             let icon;
-            if(NIAPlayerName.includes(playerData.nick)){
+            if(NIAPlayerName.includes(plrname)){
                 icon = new plugin.playerTracker.iconNIA();
             }else{
 	            icon =
-	                OptionData.surveillance.includes(playerData.nick)
+	                OptionData.surveillance.includes(plrname)
 	                    ? playerData.team === "RESISTANCE"
 	                        ? new plugin.playerTracker.iconResSur()
 	                        : new plugin.playerTracker.iconEnlSur()
@@ -663,7 +664,7 @@ function wrapper(plugin_info) {
             playerData.marker = m;
 
             //m.addTo(playerData.team === 'RESISTANCE' ? plugin.playerTracker.drawnTracesRes : plugin.playerTracker.drawnTracesEnl);
-            if(NIAPlayerName.includes(playerData.nick)){
+            if(NIAPlayerName.includes(plrname)){
                 m.addTo(plugin.playerTracker.drawnTracesNIA);
             }else{
                 m.addTo(playerData.team === 'RESISTANCE' ? plugin.playerTracker.drawnTracesRes : plugin.playerTracker.drawnTracesEnl);
