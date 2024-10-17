@@ -1,893 +1,1048 @@
 // ==UserScript==
-// @author         otusscops
-// @name           IITC plugin: Player activity tracker (otusscops)
+// @id             iitc-plugin-PlayerTrackerLabel
+// @name           IITC Plugin: Player Tracker Label
 // @category       Layer
-// @version        0.13.0.202410151310
-// @description    Draw trails for the path a user took onto the map based on status messages in COMMs. Uses up to three hours of data. Does not request chat data on its own, even if that would be useful.
-// @id             player-activity-tracker-scops
-// @namespace      https://github.com/IITC-CE/ingress-intel-total-conversion
-// @updateURL      https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
-// @downloadURL    https://github.com/otus-scops/player-tracker-scops/raw/master/player-tracker-ja-scops.user.js
+// @version        1.6.16.20220201.224101
+// @namespace      465951658
+// @author         465951658
+// @updateURL      https://465951658.bitbucket.io/ktA18nVsBF/pT6DbQawHe/PlayerTrackerLabel.meta.js
+// @downloadURL    https://465951658.bitbucket.io/ktA18nVsBF/pT6DbQawHe/PlayerTrackerLabel.user.js
+// @description    add name label to player tracker
+// @include        https://*.ingress.com/intel*
+// @include        http://*.ingress.com/intel*
+// @match          https://*.ingress.com/intel*
+// @match          http://*.ingress.com/intel*
+// @include        https://intel.ingress.com/*
+// @include        http://intel.ingress.com/*
 // @match          https://intel.ingress.com/*
-// @match          https://intel-x.ingress.com/*
+// @match          http://intel.ingress.com/*
+// @include        https://*.ingress.com/mission/*
+// @include        http://*.ingress.com/mission/*
+// @match          https://*.ingress.com/mission/*
+// @match          http://*.ingress.com/mission/*
 // @grant          none
 // ==/UserScript==
 
+
 function wrapper(plugin_info) {
-    // ensure plugin framework is there, even if iitc is not yet loaded
-    if(typeof window.plugin !== 'function') window.plugin = function() {};
+  'use strict';
+  /* eslint-env jquery */
 
-    //PLUGIN AUTHORS: writing a plugin outside of the IITC build environment? if so, delete these lines!!
-    //(leaving them in place might break the 'About IITC' page or break update checks)
-    plugin_info.buildName = 'release';
-    plugin_info.dateTimeVersion = '202408291345';
-    plugin_info.pluginId = 'player-activity-tracker-scops';
-    //END PLUGIN AUTHORS NOTE
+  // ensure plugin framework is there, even if iitc is not yet loaded
+  if (typeof window.plugin !== 'function') window.plugin = function () { };
 
-    /* exported setup, changelog --eslint */
-    /* global L -- eslint */
+  //PLUGIN AUTHORS: writing a plugin outside of the IITC build environment? if so, delete these lines!!
+  //(leaving them in place might break the 'About IITC' page or break update checks)
+  plugin_info.buildName = '465951658';
+  plugin_info.dateTimeVersion = '20220201.224101';
+  plugin_info.pluginId = 'playerTrackerLabel';
+  //END PLUGIN AUTHORS NOTE
 
-    let changelog = [
-        {
-            version: '0.13.0',
-            changes: ['Removed unused and obsolete code'],
-        },
-        {
-            version: '0.12.3',
-            changes: ['Update for new COMM messages'],
-        },
-        {
-            version: '0.12.2',
-            changes: ['🐛 - Exclude __MACHINA__ actions'],
-        },
-    ];
+  // PLUGIN START ////////////////////////////////////////////////////////
+  /* change log
+   * 1.6.16: setting version 2
+   *         change setting load/save sequence
+   *         mobile:iOS:setting dialog keep value on returning from remarked players dialog
+   * 1.5.15: Change namespace implement.
+   *         change implementation to fit label layer active state to player tracker on separateLayer mode
+   *         support playerTrackerCustomizer
+   *         specify dialog id (to fix dialog not to be overlap)
+   *         mobile: dialog transition behavior for iOS.
+   *         mobile: on displaying the setting dialog from the tool palette, return to map display.
+   * 1.4.14: including remarks setting in setting dialog
+   *         support intel.ingress.com
+   * 1.3.13: set dialog default focus
+   * 1.2.12: change namespace
+   * 1.2.11: support remarked player name alias, combine overlapped label
+   * 1.1.10: label horizontal/vertical Align setting
+   * 1.0.9:  change version expresson (major.minor.build)
+   * 0.2.0:  separate remarked player function to RemarkPlayer plugin
+   * 0.1.2:  Do not display labels when the zoom factor is lower than PLAYER_TRACKER_MIN_ZOOM
+   * 0.1.0:  remarck player description
+   * 0.0.4:  separate layer option: label can be drawn on a label layer (changed by setting)
+   * 0.0.3:  first public version: 
+   * 0.0.2:  add remarked player function
+   * 0.0.1:  initial version
+   */
+  /////////////////////////////////////////////////////////////////////////////
+  // namespace window.plugin.remarkPlayer
+  // use own namespace for plugin
+  window.plugin.playerTrackerLabel = {};
+  window.plugin.playerTrackerLabel.loadCompleated = false;
+  /////////////////////////////////////////////////////////////////////////////
+  // namespace window.plugin.remarkPlayer
+  (function (playerTrackerLabel) {
+    /////////////////////////////////////////////////////////////////////////////
+    // external value
+    playerTrackerLabel.initialized = false;
+    playerTrackerLabel.supportPlayerTrackerCustomizer = true; // always true
+  
+    /////////////////////////////////////////////////////////////////////////////
+    // values
+    // layer
+    var labelLayerEnl_ = null;
+    var labelLayerRes_ = null;
+    var labelLayerEnlEnable_ = true;
+    var labelLayerResEnable_ = true;
+    /////////////////////////////////////////////////////////////////////////////
+    // CONST VALUES
+    /////////////////////////////////////////////////////////////////////////////
+    const LAYER_NAME_ENLIGHTENED = 'Player Tracker Label Enlightened';
+    const LAYER_NAME_RESISTANCE = 'Player Tracker Label Resistance';
 
-    window.PLAYER_TRACKER_MAX_TIME = 60*60*1000; // in milliseconds
-    window.PLAYER_TRACKER_MIN_ZOOM = 9;
-    window.PLAYER_TRACKER_MIN_OPACITY = 0.3;
-    window.PLAYER_TRACKER_LINE_COLOUR_ENL = '#FA6868';
-    window.PLAYER_TRACKER_LINE_COLOUR_RES = '#FABA68';
-    window.PLAYER_TRACKER_LINE_COLOUR_SUR_ENL = '#8D57D1';
-    window.PLAYER_TRACKER_LINE_COLOUR_SUR_RES = '#E05E47';
-    window.PLAYER_TRACKER_LINE_COLOUR_NIA = '#999999';
+    const KEY_STORAGE = 'plugin-playerTrackerLabel';
 
-    let PLAYER_TRACKER_SCOPS_STORAGE_KEY = 'player-tracer-scops-option';
-    // オプション値
-    let OptionData = { };
-    let AgentsNoticed = [];
-    let NIAPlayerName = ['NIASection14'];
+    const LABEL_PADDING = 2; // px
+    const PLAYER_TRACKER_MARCKER_WIDTH = 25; // px
+    const PLAYER_TRACKER_MARCKER_HEIGHT = 41; // px
 
-
-    // use own namespace for plugin
-    window.plugin.playerTracker = function() {};
-
-    window.plugin.playerTracker.setup = function() {
-        $('<style>').prop('type', 'text/css').html('\
-            .plugin-player-tracker-popup a {\
-                color: inherit;\
-                text-decoration: underline;\
-                text-decoration-style: dashed;\
-                -moz-text-decoration-style: dashed;\
-                -webkit-text-decoration-style: dashed;\
-            }\
-        ').appendTo('head');
-
-        let iconEnlImage = 'data:image/png;base64,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';
-        let iconEnlRetImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAABSCAYAAAAWy4frAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAIGNIUk0AAHolAACAgwAA+f8AAIDpAAB1MAAA6mAAADqYAAAXb5JfxUYAABHoSURBVHja3Jt5cFNHnseVndTOVmpma7eytVWzU5Odqq1NDc+SbUmWdfgg5glLIDyy5EPC9wFjrnHAOCSZgN8ax5EDcRIzLhsLfIAd+UBgG2NsbEwsH5BwJAESCARCIBBCgADmNNd3/5C6/WQdOAkkMF31LY7X3b/fp3/vPXX/up8AgOAfQQ+9xFWH/M5olcria2WGuOqQXKNVusJolb5jtEoXG63SxPhamSquOuQP+cPGXwkep7Llq/VPxVWHKIxW6Vtx1SEnjFYpJqgLcdUha4xWabTRKn36FwMwWqX/ZbRK3zZapafGOxlXHYKEOhnMNjlSW1VIaw9DUrMCpvpQxFWHeIO6aLRK18ZVh/zPzwagrxA/Y7RKOaNVep3vjNkmR3ZPJBYPGfDqLrNf5Q8bkdMfhWS7cjzYqKFK8pa+QvxvjxTCUCVJN1RJzhiqJDBUSZBQJ0N2r9P5l3cmeGjJzng3+aqT0x8FU30oSL+GKsl5o1U6/6E/R/py8T/HVkpqYisliK2UwGiVIqs7AvnDRjen8ob0WDCgxTyHGjn9UZjVN9lNOf1RyOmPwnxHNPKG9B5w2T2RiKsOAbETWynpNNWH/vZhvYWeja2UOEjnqa0q6sSSnfHIHzZiwYDWq+MPEoFaPGSg/S0eMiB9cxgf5oC+QvzcT30e/hRbKTmmrxBDXyFGdk+kB0B2b+RD0XignP4oxFZK4LJ9NrZSEvqjIGIrJX+MrZR8p68Qw2iVYp5DTY3kDuowq28ysnsiPZT7/gwMnN6Civ0FXq/706y+yVgwoKV25juiEVcdAn2FGLGVkmv6CrHoh75af6OvEO8nELmDOuQPG5E/bMQ8hxpZ3RE+tcSRAFKGz3RhQZ8W2dsiqLKI/PSR0x+FxUMG5A8bsXBwBuJrZSQyX+pKg56dEMRzimef0peLW/XlzttpnkONxUMG5A3pMatvsl8Hsroj8JIjAaN3b1GYkyNHsXQo7YHtxmtW32TkDemxeMiABQNa521WLoa+XLxjQj+g+nJxoasB/V3IG9IjuzfywQ50ReClfncQALg6ehmle/KQ1R3u0sRgsnsjKUxOfxQBgb5C/LZfCF1p0PMxZcF3YsqCkdYehrwhPfKG9Mjpj0JmV4RXZY1TvhcQALhz7zbW7C9CZlc4T2PtfPVPIpM3pEdaexhiyoIRUxZ8N6YseJK/aGyKKQuG0Sqljec51D6NZG71VP773kEA4D7uw/rJcmRuDR8n3yCZXc5nhvgTXytDTFkw9OXiLb6iEaYrDYKuNAjZPc6Q5g7qkNEZ7inieKen8nfEu4H0nrCj81gDLt08DwAYvXsLywbSvffrRwsGtPQ5JX7qSoOmeAPZpSsNQkKdDAsHZ2Dh4Axk90QifXOYmzK2hHuqc+zvi/vcQZYNpCNjSzgWbTfg0/O7AQBdx21e+0nfEu5hjyirO4L6ZaoPJSAfPad49ik+RAihzOmPwsLBGZjnUHvvtCMM6R3hSO8IRwbRFt8grw/NQUaHs13N/jcBAFUfL3f1M06b/Yv4ltMfxY+Kig/yhq40iP5m5A7qkNkVgbT2MA95goW7KW+7O0jR0Bxat/SDfFiG57u1b/28GhV7C5C2OcyrPb4yuyKof0arFLrSIExfGbiSgkxfGXhk+spAJNuVyB3UYZ5D7dlRmxcoD7Bw5PW6gxQ4MpHuw8n0zRH45upJAMCq3a85bbSpxuSlzTyHGrmDOqS1h2H6ykBMXxn4BYmGcNqKQExbEYic/ijkDuqQ3ROJ1FaVVzmNeQdLaw9DXm887ty7TUE2Hl7jPhg8/X33Ulrv9r1RlH34qk+7RNk9kcgd1CGnPwrEb11pkFCgLREtnrYiELGVEiwY0GLBgBaprSok25VUKZtUSNmkQuomP1AuLdxmwMjoZdy5d5sCfXi6D3M7NUhtG2s7t3MaLt445/GKXrvvDaS67KVscvcj2a5EaquK+mmokhCYJQJtiWiVtkQEU30o5juiMc+h9micslGJlI0qpwiQFzCi3C49Fm2Lw+KeeLyyPQmNB8vReLB8rM4mFdoO11Dnmz+tROdRG/137ccrkbJRieSNSg9fku1KOv031YdCWyKCtkS0WqAtEW3Slohgtskx3xFNl6AeMOOBNqqQutEdKqv9Bczp0CCjLdIddpMKczo0YyO9UYUzI18BAA6e2+3qT4mSwRdxdfSy882253WvfvBBzDY5tCUiaCyizQKNRbRbWyJCaqsK8x3RyO6J9NmBG5RdhRS7Csv6srDlSAOOXNiP89fP4sqt73HxxjmcvvIlhk52o+ajFXhxa6zbAKRsVKHnmB0A8PWV48jvNiHZrsTcDvfbzZf97B7n+iW1VUUisk+gLRF9o7GIkL45jE7RPRpv8NT/7ZiN3affx/379/CgcnX0CvqOt+LlniSkuPpMs4dj42drAQA3bl9D++F1OHPlBG1z/PtDSNrgHSSzK4L+zmksImgsorMCjUU0orGIkNEZTudVSc0K72pRIKd9GrZ90TIhgPHl1p0baDtUi5x2DZJblEhuUcLieBGXb16gdW7cvgb7p2uQbo/06QcByegMJyAjAo1F9JnG4ry1SETMNrmbZjYpMLNJgaId83D26imvk8Fvr36Nz87txQentmPXqV7sPe3Al98fxs071z3qfzNyElzfbCQ1K5HUrMT8zTHoPtqMrqNNWLw1kdqb2aTw8MVskyOr2wmS2qoiIIcEGouoU2NxPuzjQbI2sMi2q7GoIwEdhxtw9/5dN4eOnD+AdfvexivdqUhviURSk9Kp5jHldhhQ+WER9p/9APd4URy9ewstB1bjxQ4jkpoUSOI5P7NRgZmNcpgb5X5BzDY5AekWaIqFFZpiIeJrZcjpj0J2TyRt8PfhAlwbHfEY0Us3zqNiV6HLoAJJjQokNSrH1ORdr23LxL7TAx79fXRmCClNYWMANv/K7olETn8UjFYpNMVCaIqFVoGmWPiypliImLJgmneit5RNgeo9b+LC9W9x9/5dXLp5ATuOteOvbXrMtCn8q1FJlUT/7gR/05GHj84M4eSlL7D39ACWb5+LmTbebfSeSz5AiJ8xZcEEZKkgukgY6foHsnudmYxkuxKm+lCqjKYXsKg9AVkt6jEj78mR0fwC3h38G17ZmorMlilIsqkw870xmNSmCPy1TY+3HC+h71gb1u97BylN4R7QZpvCrV9Tg9zNPl/JdqUzg9MbSSCgKRZOE+grxE9rioWXNcVCWimzK8JnR6b6UJgb5DA3yDHTpsQ7g3/DuauncfPODZwdOYUvzn+Ko+cP4tiFz3Dx+jnX2+omWvZXIa0xwgnq0iy7Bh+fGcbBs7vxet8CmBvkMDWE+rVNlr/JdiWBuG6okvyLQCAQCKKLhHZNsRCGKglNMkwEhGjuRh3sB9bgwvVv3e79M1e+gv3AWixo1cPcoHBTetMLOHTuI7f6/cc7kNXM+rWd3eNM6BmqJASkg07jo4uE2dFFQmgsIpr5I9sAXkHq5TC5ZOYp1RaORe0JeLUzHbmtcZhZr4S5XuGuBgUymqKw52uH81V85SRWDS7D3q8HAQAnLn6Ohe3xXu0mNSuofxqLCNFFQkxdHjCHgkxdHvD7qcsD7k9dHkCnAGntYX5HxrRe/gApYFqvgJmnmQ0qmOsVsO6y0MzKki2pMNc7B+34hUMAgIHjW73azOgMp1OoqcsDMHV5wD1NsfAPbmv26CLhVnVhAGLKgpHdM3Z7JdTJvCpxXShM6+ReZV6nQIZtCnJadJhvj0VRzwJs+9yONbtKYF6vwLKuWbiP+7h3/x4qhouQuE6O1zqzcH30KkZuXUJem8nDHr2teiKhKw2CujAA6sKAdo/kg7owQOe66EbuCyShTobEulAk1sk9lNOsw7cjp3Hrzg3cvXeHTk8WtSbCtE4B0zoFNnyylkalYe8qnL92FgBQsn2RV1tkUZW+OYxAQF0YoPYAiS4S/hPLMSdYjqH7Hxmd4YivlflVQm0oEmpDkVgrR6Lrz/kb9BRg9O4t7DnpQF6rGYm1cpjqFLTuzhPb3R726g9W+rRDso9GqxQsx0BdGHDIZ4KO5ZiXWY6BplhIG5J9P3+Kr5EhvkaGhJpQJNSEYl6zHrfu3AQAWIctSKyRU5E68TUyzGrU4srN753PxbEun/2TaUlWdwSii4RgOQYsx8z3CTJl6aT/YDnmFssxMNWHIqs7AqmtqgeCxFWHIG5tCOLXyhC/VoY5zTEUpKx/GeKrZU65rsetHWu388R2jNy8hLSGKT77TmsPo4PqgrjCFkz6jd/8L8sx61mOwfSVgcjqdqYs42tlE91yRtyaEOQ0zqAgq/o5xK0JoRpfv+9IOxp2l/vsL6Fu7LbSWEQEpOyB2XiWYxSuyki2K5HV7Vyf/ID9c/zFphsDeb/Ab91FdjNM1Uqf1/k+uPy6ry4M+N8J7ZGwHLOP5RjElAXT3OvDAnmzJx/JtRET6ie+VkbtT18ZSEC6JrxjxXJMEj8qGZ3hPygq/kBa9q1B3+ftE+qH2Dbb5AQCLMdMmTCI61V8kOUY6EqDaCbRaJXy98J9avZ708ce9vcL3K4VdOQAABZuMPntI75WRu1OW0GjseMHb4ayHGMgo5DUrEBaexjMNjl/29inZtfzQPoK3K692JwIAGjcs9pvH8l2JbVJ/FAXBoT9qJ1dlmP2kKiQtKfRKv1JIFzHXOdM90inz/bxtTJqT1tC31Rbf/Q+O8sxGjIaZpucjhDZd/elWeunUZB3+5a5XWvZ65yatH1S77M9scX73YC6MED6kw4NsBwzyHIMpq0IpClPo1X6o0AMlVKcuHAUAPDO9qVe2xqtUmqH97ux6Scf4WA5JpKMiqk+FKmtKmdUyA6rF81axwPpXUb/37I1j64Ys+u0XtuSo1EJdTICcU9dGCB8KOdRWI7ZxnIMSGo1tVUFQ5VkQiBl2wugLxdj9jodvhtxznB7P2v12s5HNGwP7XQQyzEyb1FxbRV7KKtGS0EsnYuRYo3CqYtfAgBGbl5Gds00r+1INOKqQwjEXZZjnn+oR51YjmljOQYai4jmYA1VEv5eHlWGVYPRO85dq9qBd/H5NwfoVH1F5yte2xiqJLRfTTGd4dY89ENn6sIAEcsx91mOQXytjKaMfIGQiNy+O0ohPjze77W+rjQIZpscyXYlXW+wHHM7ukj4x0dygo7lGBtZr/iLCh9kLIF9Ezk1+gdGg7feqHhkRwFZjnnedd/CaJXSTItrU5IqvUqDW7fdQWw7V3vUIyIZkthKCYG4OWXppN8/0nONLMdUk6iQNL++QuwX5Lsr3yBhlcorhKFKgqRmZ7qUF423H/kpU5Zj/pvlmFGWY2CoksBsk3tEZTxIZZ/FbzTIHM4FcW3K0kn/+bMcmWU5ppzlGEQXCWliWV8hptvFaavHQE58dxR/Lg2h1/giA2G2yTF1eQABeeNnO/urKRb+juWYGyzHILZSQhNorv08pFVE09fv662L6P/zNW1FIG2nLxcTiMtswaR//1lPYrMcs4LlGExdHuDmkLZEhPRKDQBg34mdmFYS6BVEXy6m7dSFNBoFP/uRcrZg0rMsx4ywHEOdSqiTQVsigmlVJN4bXg3TqkivEGRfn/wOuSAuaCyi3wp+icJyTKGvqPgTH5wXjSW/2EF/dWHAv7Icc5EsvvhRce3teUhbIqK5XF5C4eyUpZOe+UU/uyDZSXVhAHVQXy72CeIjGrm/+PcjU5ZOeoblmG/J4osknTUWEX9rzCmLiF7nJRROsQWTfv1YfAzDckwuiUp8rdNR3kYllb5cjIQ6GeKqQ/jR+Mtj81UPWzDp1yzHnOJHJa46xAOEfCDDSygc11eInxY8ToXlmNkkKiRny49KTFkwEupk/Gk6WI5JEzxuRV8hfprlmC/Ikph8qUNAyCdLvGgcfuHVP/1K8DgWlmOSyWgbqiT0ACU5+GmokvCjkSh4XIsr1fopWRKPz+XyEgqfuJ3XfUyjYiSjTj5jItlJXjT+LHgSCssxe8dHhReNDwVPSmELJmnJ6JOcFS8aUwVPUmE5ZogsiXnpHYfgSSssx0zmRYEoUvAkFpZjengQ2wRPamE5JpQHEip4kgvLMe0sx7QLnvTCckwQyzFBj9rO/w8AsWfTZcVFvbEAAAAASUVORK5CYII=';
-        let iconEnlSurImage = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAApCAMAAAD3TXL8AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyBpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMC1jMDYwIDYxLjEzNDc3NywgMjAxMC8wMi8xMi0xNzozMjowMCAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNSBXaW5kb3dzIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjg3NzU0OURBREIwNzExRUJCNEVBQjY5MkIxOUEzOUFFIiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjg3NzU0OURCREIwNzExRUJCNEVBQjY5MkIxOUEzOUFFIj4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6ODc3NTQ5RDhEQjA3MTFFQkI0RUFCNjkyQjE5QTM5QUUiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6ODc3NTQ5RDlEQjA3MTFFQkI0RUFCNjkyQjE5QTM5QUUiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz5gxC8gAAADAFBMVEVJnzVytFb/YGBOnC3/TU1jy0vkGwn/Kytk0lJDojZXrDNkw0ZJiy1Uuz5VszzYKQ5vu05cpzzUNxVuxE5LqznBPRRmqkjh7NyIt3NOlTGLw3RSnDRaqziabCXV5M5EkjFcrTni8NxXpDb/4uP6/Pq+3LKNyHP5BgL62dj/1dVGhSv/o6M8ixv6FhSZijWdzIlRoS9Tqi9UnzXM48JurFPn8+L/9fWXw4NttE7e7NhhtjzEQxZ+u2ResTtq0VWKpkbu9unC4bWZmENxii5OsTtqvUeEvWtYpTdMoimJhC3z+fJGiCqVyX7/AADyRDuccCbc6tXB3rVGkyXspaK32Kjp9OSy1qFWojZiuD1gtTtnxklQmDKd0YdSmjNbsDZAgyP/6upewUPF4bhthy3T6MpVpjNKlSp6nDRdxEXGSh1cqjpLkC1brDlaw0GQy3dUojNQljJgsj1NkjBfsjuVzH6Sznhiuz1mtEVgtDzc7tVIkSiw0KNctTZZsTOlz5OjyZRXoTdQmTFNlS/fHApWwUBbtDRVozVTpS9TozD/Cgr/////+Pj/n5//BwdhtzxWoTX0CAOOv3mkypT/rq5gszuXaCL/R0ddsDpSmTP/MDBVojRkvUL/srL/mppWnTjv9eyTlz/LLg9fszz+/v3+/fzY69Gm1pFxuFN1vFf2+/S52qtSoDVpzFBZvz+AnDR0w1CBbyVEiCdHhy2Fr3O01qVluz+Qv3vI4bxNjzCTwH9/oDlRny/5aWTpUU6kx5Wnx5lbv0HtNS3/wsJQjTX/2Nipz5mHw21frj5HpTf/Z2eYxoSexI1wxk/G3L1fxUWhzI6QyXhXrzJzjzD9/vyaWx50sVtYqDdlvD9WkjxMkC/nGAfuGw6iypGbvo2QhS2mzZTjIAvw9u1hyUZHljNyuFRnwkZbtTRcsjehaiVAjR+jezBJlyhcsTiqdi/a59RPnDT/7+/W5tCBwGVyrFiIymyu1p5poFK326dcuDXs8+j6tbGg04n8t7S21Kp0v1D///9vGSXYAAABAHRSTlP///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8AU/cHJQAAAxJJREFUeNpi+A8HCcpAsATOZYDSmr+m6fo+UPf1m6bdjSzTzdT7IHOB0z97p7dC6ux/EDJz2B+8Wm/H+uhpFOsaO/vM23u6oTJzeoWE7Z6Wubr+KCsrux7FoefL0g2W0egVOhMVEVFTavrlWQQQbOXQU2cxA8qY7RUS5u6LiHhW2qXyuxXI6OsDSvUAZbRvuUZF9vVZteZ1rexaVmMFZEZw+LObMSTM9GetKK6oqKjN64opcRC4+HzKItvZrmzBDJObXWdPty0uXgSUyYtTe1Oy4qKtbTGr/zQGdn7W6QrTp0+35brQ5bjIsNwr1IJrukLiLl0G3xfnZHIUFBS4DMuP+Xwy/G76vfIJl0xhBj+Dr2eiTE6O4XGfpBRH/eUeXyuXO6QY5kwHydw7cK293U2xq2txV5dKmIKP6VKb1GsK50B61gq6repyqLNhZDymellRijGrw91dJhcoY52rVKe4Rexah4dHm4WNaog7UEKJb90EoNtaru2eZWDglmRsbKyfbxB2vi1fKZzX049h8oR0vvA2JaVZJqcmijG3BaYEbhcMV2qxngYMA+uWfiAIX81sMvG+mOLRUwGC0nzp6toM/0+yTblmBAaWD7cxX11pKsZsxCsLDLf/RzpleWOlgSBW/E5Q7GvVia+l2yrYmEDxw/SgePWM2NjGRstJafMaTaRjo/n8OzVBMod8/V2iITJBOz+nNc5YPR2oBSTzgYVN4X10dLSkZf1L8+qq6AIXWaAWcDoA2uQiWSDZZFmvU/23SvJ9DkgLJO0wsWW9lwTKnC74KVFVBNECkdHslBXZcTM7YN/Zj0XZ0VlgLdCUyMR2TZKHR85L5dtGHpGpYC1QGc3OqSJAma798TyPL6kzIadrJjalIu93829484iIQrTAZDQ7RU9oid+N3/TYGaoFnheY1J0fbz7svekETAsilwA1xWttkodrgcuANMlraSG0IGSAmhi05JPhWhAyQE3J8pyiB80wZTQ7FzJsUA/+jynzv8f3SjO7GTYZM3Zf357/2GSAmpC0oMiYsc9F4gEEGAD1tEMNVndH/wAAAABJRU5ErkJggg==";
-        let iconEnlSurRetImage = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAABSCAMAAAAhFXfZAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyBpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMC1jMDYwIDYxLjEzNDc3NywgMjAxMC8wMi8xMi0xNzozMjowMCAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNSBXaW5kb3dzIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjYyNENGQzJGREIwNzExRUJBMjNGOUM0QjAzQkY0NjRFIiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjYyNENGQzMwREIwNzExRUJBMjNGOUM0QjAzQkY0NjRFIj4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6NjI0Q0ZDMkREQjA3MTFFQkEyM0Y5QzRCMDNCRjQ2NEUiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6NjI0Q0ZDMkVEQjA3MTFFQkEyM0Y5QzRCMDNCRjQ2NEUiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz5orDtkAAADAFBMVEWezYpemEWRvn5xsVXB3LWb0ISTynzV6szx+O623KXq8udtq1PL3sO92bFgqUCbzIVknkt8u2JWoDeDvGt8tmPe7ddisUBxrVfJ471brDlYojhkokr2+vTf69plpkpTnTT8/vxUnzVQlzJYpTfE4bjE5baSwX7i7t1bqzlcrTpYpDh4uF1rqk9vs1JWkj1tvkqHxWuLwXRztlZeqD1Wnje73qzS58mNynOs1JtepEKJu3Pz+fBfsj11wVWky5OWxoLs9ehXoTdcrTlos0fO5cTM5MLL4sF5tl76/Pn1+fO526qaxYdVnjZUnDXk8d5xuVLa69NyvFRzulRfrD2w15+q0pmqzZymxpihzo1apznv9uvr9Ofn8uLm8uFdpjyHtnN0v1VnqUxXpDf/AAD///9SmjNXozZiuD1YpjdesTtdrzpfsjtVoDVjuj5htz1PljFPlDFRmTJLjS9IiC1juz5gtTxKiy5kvT9nwEFaqTj4+/d2xlRyxE9qwUR3xlVgtDxHhSxZpjhdrjpNkTBHhy1esDv5/Phuw0trwUZswkhzxFFJii55x1hXojdaqDlZqDhww0xhtj1fsztitz10xVL7/fpcrjpZpzhaqTn/AgJhtT1TmzRZpzlYozhhtjz4+vdjuT3+//5esDphtzzt9ulgmkf4+/an05RiuT39/v1Xozd9wl/8/fvG37xiuDxtsFBaqDj5+/hZpzd2tF2XyYNjrESbx4nj8d3Y5tKPvHy02KSp1Jd8xF54u1pOjTR+wWFapjpsr09/s2hZpDr9/fyny5i93LBnsUhXnTmKtXhgpkLc7NXZ7NFjoEiW0X5bnz1xvFFgszx0uFeXvYdnp0xftDxgsD6Pw3rM48Ot1pyr0Jys0pus0pyfwpDv9+xdsDq52Kzo8+NcqDxvt1C32qhgtj271a9ps0lrsk1ptUiEr3Hy9/BiqkNkrEeIw2+RvH5esjuv2J2AvmWExGiHwW+Qw3pJiC6TxX7h8tpYpjhZpjmw0KOx16FprUvl8eD///9C45HSAAABAHRSTlP///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8AU/cHJQAABmNJREFUeNqs13d8E2UYB/DULkAooyC9AoZSgbYyRBCUIpSyUQRkqxUx741ccmnSJuTSXCwNbdOkSkvpwrZCGWVPFQXFgQoqouIEB1rAgdSFe1HfcRlNrrX44fdHc+/zvt97Lsn1cqdqvuKolIoaX7a1i2iC8x/Ev5DXtoZUCkDwPCynXFRAqmBh9jyEYochG2Lwm1K1BGw5XCW5HaIVRhSLJOSElo1UgYKX7PZyN17ujVjksds9ukCjChACAuaQICQGGJVfOOx2l1VAGT7wTSEgVrfdXuQ3Kp9wlZc7WJLbARg4fP369Vu3ygXRU17qMz7i8EhW1ksKAfj9WTYgVsnj9hqVLASPZPbOr0EEpI7ZvdtvzJJHDCBwUytJogFnDcwDiICKyI0bN8IxqVslSUsMIbQkOcjMahRCQH3kYzCryYRBlKQEL0GHJbksKF+sfhQFkVs6ngGFOywBcUtW3AYTfWmpoIPJRbHk5s6FZEfu29GgI668r8NhS0sZQqAUSx24WFZWdvJkLiE/nSyLBJFlKDo5Yin+BBChXS6DFkVmZZjoxo25CY5/jPpBK8fgctEyoVwOVCnwsnGIPK/Dw3EZIKpgw4YNeOBwaRFBx+USeJyCAsLmVgBwGu4DJgqAwihejuBCR4aI281TFFVZ6SSqoGB2akUFiLvwGc9f2IQ+7a7Oykq4guLdbhMmTJEDjdOTkyudTife3bnZdx/esoXnnfMBeOY8qF+cno6WUGIRgwlXJOIxQsnJUF036QP41znJWZmcAaLT079LBV0pmXCY8EUC5Uty90NvpHXYdNcNqnNoBzPBU+9QX8GjI7NCEY+JzsGiYRLKpbhtQE7q0cMUNe806Pv3ZQB6JWFicOgwsTgMNpJjM30ApWH+saSkn88A0PfWeWSBwWEhB+ZgOZiSkthGfDI2RsfFTenVgLYzLlVXf33+/M0lJSVoCcc6yIFxiDQ9GX6oP1w0Z/GNMatWVVdXD31iNGxZuGDo3r0lJVX798uEvP0EUeC432agvd4zoapqCcwqnO6nUG3y2SqyHkYQafJViiLHJarS+p85uidPTm1t7ZLaqv0jJg+eEpsHZxMJEb3fvtlKMQwTE96UmJgY88u0phcS8/JG7hlxdPFZpP+A1QcZHMpqlgllNZASk5Ly54eNDffNmXM8DeQsGAkXfzt5dGyKLBiDldJopqMz2WRmfSQl5Z+P0+A7uPzJi2gQEw23I5rkacFskk9+jdlsI7W67dvr6uruD5+2pw4lJWYqyBh0CvQKx7M2s9n7L6ahBK28n0d8iY+Pf6nuAKh4vI45DiLwpEWgCMGXC5bR40yU8/qyIbGfH4jvWb9twsSeMy6GozlGEPyXCw30hOh74CxrbNgJGsJ7TPwIVIy/F4zFU7ygCyA0a0nwBZIhO0Hh1N4I74Jv/wCpsywdcOnTsCyjlnMnzJAccMeoUaPg1vUdQASpcyzrv1quhf+ZLO8l6lmzZi3LAYPwhlq96+JtpKxlGT/BbQwJtC8170FSU1ODtruMJzW9t4mPUKzNT+jrc8A18mbvV8krXBBI8IdmCSVj3/JVEiyWkJ8kymILIQu7+CqUhQshGp2ONnmDCHw5AnrLhQSdLui3EhmblhvgTR9I4Mu14BW5QGm5YIJ/ybR0EDkCIjLxOEGrDfkRR4TTcplyEIEvC8FfZMxpmVCCDM/TLciAfuAgHtI8r3B3gQjDc0YSSA4ajUtBzgk85Hi9EiFtTD7yvbFPJ/AlHrVs0pLANitxTuSApWGDwcVueMTxamWCv0/KlIWyeR/49GkAXsMDE0W1uIlrSRIohpAcMB3Ud8bbWRxFt0YC2kACQE43xSbBhLYxy2E2r4Nk0XIcBp3Ba9u4HbXZMmXSaRgWJhvXxu0oIiaOkcm7chMuqEnQfTI6bbjM4uKwdaDfc8UoJi64SSjRMEx2ftg+8E02SjHDaNom+PtkjNlhoPOvmBgZpu27cbmNPnvYomFYZCs0CXlMkNvIMTL60OcEBYLa5ONk65ngj0vpYQSu0TNGQhSbhJK1yOjzV8Dk6/Wa9hB8dupXImLUqxVEK09JejUiasUmSs9i6OxEbVbqaSXRCtGo6RUraHRYL7fviQ+dnXRWFm1SbNIa0aDrsLJo/bkSi/aTZi9pviKi0VwZaW5DXEXS3Lq4mqS5VfF/yL8CDABJdd/IjlyGWAAAAABJRU5ErkJggg==";
-        let iconResImage = 'data:image/png;base64,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';
-        let iconResRetImage = 'data:image/png;base64,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';
-        let iconResSurImage = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAApCAMAAAD3TXL8AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyBpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMC1jMDYwIDYxLjEzNDc3NywgMjAxMC8wMi8xMi0xNzozMjowMCAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNSBXaW5kb3dzIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjkxNTAzMTdCREIwNzExRUJCMEJGQ0VDNzJDRjhFREI4IiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjkxNTAzMTdDREIwNzExRUJCMEJGQ0VDNzJDRjhFREI4Ij4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6OTE1MDMxNzlEQjA3MTFFQkIwQkZDRUM3MkNGOEVEQjgiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6OTE1MDMxN0FEQjA3MTFFQkIwQkZDRUM3MkNGOEVEQjgiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz69Mr/ZAAADAFBMVEX+s7NLltMsk9olgc3/Kyseecj/S0tjt+ri7vjdFB4ZecY5jc5TntQ8ks3sGBk9k9L///9xrt2myun/+Pi7OU1BndyVwuUTc8Vzi7WaxeZJmdGLWX1qfq3s9PpEod8gesh5a5Mcd8gYdceLveKszuqFc5r/o6M6is3/1dUviMuFfqPeFiDI4PHgGiHKKzpjo9k+ntr/4+KJV3282O4ljdmFTXX1+f2HuOHpNDV6tN2GbpJYnNZ1rtzN4vNeodfo8fmpzOo2jc0yiMzI3vKw0Owhfc3/AAB9eaGFVX1sqdslf8kqhcq01OwiitkuhMujyejE3fE+is00isw5hsp2stz/6upoptkxicuCUHl8tN661+6y0+va6vY0iM0whssvhsvG3/Esg8u41u221u1qqNv7/f74+/0xhswifMh8st93st3m8PlLpt3TLDm+PVE8nt5Mm9JBkdC41+4rhcpDlNDz+Pwrgsp0sNzh7ffV5/RQq+HL4fHA2++21e36BAU5mNlHktJCk89Ajc03is17s952sd0pg8oqgcoee81doNhKo9lHmNBRl9Q7j870BwrVHyz/YGD/Cgr/9fWz1Oz3BQf/n5/+9vb/Bwf/rq7J4PH/Rkb/MDD/EhIogMkrg8nvqakzitBOrOI3hMmbzuzikpEgjN5Jp+Bdo9PX6PVvrNx4irJ5sd0efstIkcrpobeCuODruLc+qOM0i8weh9lAoNv+BQI8i8stiM8yf8ZMsOXx9/xfpdbmTWZBj9BUoNSEgaaVZYQoj9sof8ryQ0H4Bggqj9eu0euCteH0CQz719eSwOTBN0vuP0KqNVNxq9xPj8b0ZGMzgcg1gshLntXwLjAjjdlHkc1uiLRDdbiVxOhddKiEU3wog84ug8xHpuDQIS5CqOJXmM1FldJZodWeyOf+/f0tg8rrrq7pn7YthsucYX/C3fBzsNzwMTn/19dxh7OOUnH/mpo7mddMpNvQ4/PT5vTSJDHZJTE1ic0ifMff7fdAlM73aGdEltB5sN////9A+8h7AAABAHRSTlP///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8AU/cHJQAAAypJREFUeNpi+A8HoYZA8BTOZYDSGhtmzXGbMsXt8Cw1YWQZ4QnTdfO0tFat2v8qt242A0KGgaXuwPKqnJyurpyqKok8vj/CUBmG6XoSCy93d0tJFRRISX3eaeXGJgyWEb6Su28LLxD8lZL6+5uX9/cD1Tq2aUCZSXv0eBbP1NHRsRXj3VdUDWQksFtNmQqUUdt63cD2WIhlpCWPZPnuSEtLyxjLjSIskxhCZ+ct6535Rrk2ycc2aWZNctLkx7VZn94fWccww819i6NO1tcV0T6VT2pe+0Snrp+c5XhPZBYDi+5D/k06WZWTNTUbA06FexeUrp/cummL+xwGt+9y3ECZLLMaRs1wTadWs5klReXh9apuDG6nRXs36US+tPtlH/lE2T9ViLvYuNypXuYEg5uCaKHjzJagoMZoAQGB0vJiJ80oG83eLd9AMo+4Z7Y4cf+IkxSo6JwbG/QySjC+1+A+g9sHOUbumZlOzc1xQgL2dolOTsVRK4v5z3MyLOkXZeTWWR3f/MPPLs041i/dqS1ppXe9whmGGX0yotw6Nn5O87wKzVQy/OLjgDLz8oH+CZ1tlP/D2Wbuth5GRjOVn8/8/OYmeW5fy6nG8P+59trtAYKsYWmy+rIq8mXP/LxqPZmkgeH2/91E6aMBKVwpAsc7zVTk28sS5aMFt2lPAMXPhH6mKBUufQH7XQJCQJmMvRXstydqgGRO6t4StXXw8gd6FCgj38BxswmoBRzbF/TUFwS4ePmf2qUiz9pTYX7VCKgFLKMxUdpkblTUIfU0FXHr7H9rwFogaWeCdhNzhorz3XMNndkpSkxgLRAZjYlGB+Xl/b8c0ufoVLoTCNYCTYkTtAOZ5RVP2cf0KGUchGiBymhM9ABqUsxkVMpghmqBpesJ2urM8vJKivLyBz0gWmAyGhNvm7ACgSJzMOcE1LwwgTPYVREoY3IbqgUuM+2tqa+ioqIrXAtcBqhpkauSkm8ETAtCRmNixGaljkuc89Hz3P//8zkvdmw2fTsNU2aahenSHZwv/mPK/J865cZZlknYZCaxaPdN/Y9N5v9UNyQtKDKTWD4i8QACDAB0a0X6pL4kvwAAAABJRU5ErkJggg==";
-        let iconResSurRetImage = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAABSCAMAAAAhFXfZAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyBpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMC1jMDYwIDYxLjEzNDc3NywgMjAxMC8wMi8xMi0xNzozMjowMCAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNSBXaW5kb3dzIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjU5RTcyMEJEREIwNzExRUI4NkYyQjU0MkMzQTczMTFDIiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjU5RTcyMEJFREIwNzExRUI4NkYyQjU0MkMzQTczMTFDIj4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6NTlFNzIwQkJEQjA3MTFFQjg2RjJCNTQyQzNBNzMxMUMiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6NTlFNzIwQkNEQjA3MTFFQjg2RjJCNTQyQzNBNzMxMUMiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz6ye3fGAAADAFBMVEUrgspsq9rM4fP3+v1ImNDe7Pfw9/seeMg1hs4uhMshesk8j85QndI7js4pgcpeoNc4jM02i81yrdwyebRWoNUogMowhsxClM+cxeYyiMw6js6UwuR5sd5AjtAmfspGl9A/jdC61u6lyujl8Pg7hcLp8vrt9fsqgspJkcU0icyqzerG3vGMuuNantc8gbVAk884iM/i7vjK4PJKltJFltBgptc5g78vhcs/ks+82O6tz+tGmNDa6fZcpNZaotU6is9fpdZOmtIZdMfI3/GaxObV5/RCktAxgs41is1FjcNOnNIcd8hNl9FYoNQyhsv9/v5eptaz0+w+js9Sms80iMtMl9JGktEadchEk9A6jM8+hr3C2/BKmtEpfssxhspNlcdJl9T4+/2HuOFJmNFGk8+Et+BUndRXntQyhs2u0OpQm9M4i81IldJnqNn8/f4ygcjl8PlBjMo2hctSnNSXwuU8i9BOmdNEkNGiyuhRmcsvda0whcpMmtIwhcxIl9BIlNBHlNE4fK00fbgmfcvI4PFGldJClNBZotUthMs6jc1co9RUn9RAj8/y9/xAkdDc6/bT5fRBi8Y4i87J4PJlpNk4hszA2vBDkNC51+1LmNJBktA4jM6+2u9SmdVMm9JDlc9FldGhx+hCkc8+jM88jc8+iMVoptpXndVVnM9MmdVLmtFJmdFIltNFlNNHk9E2is4tg8svfcT/AAD////7/f4kfckie8k+kc4jfMklfso+kM83jM3k7/g/kc/f7fc/kc49kM692u4nf8o+kc/1+f36/P78/f0yg84ziMzE3vA5ic8wf8ZBk88zhM7/AgI7i89CiLzR5fMrgcvM4vK/2e9KksjX6PWgx+f2+ftVm9XP5PM1icy71+45h81Pl8k1g8pdpdVIj8Jbo9VKl9VJldJLldNDk9E/kdAvdq84fK83gL32+f3Q4/NIkMNWndBFktH+/v/+///5/P7n8fnK4fK41e241e5GldNTnM05jc1AiMBDjcVEjceQvuRIks3///8RcIiuAAABAHRSTlP///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8AU/cHJQAAB2tJREFUeNqs139cU+UeB/BDm7bpmEM3BGKAICaQMB3J/ME2pHChk1wBWmCCta4TiSsyK4MLkoA51LJc9kNK7NcoXDxHyTFszYpFGDVL773cvAu93G637jLpx+6t7Pucs98Mf9xXn3/2PM/O+3yfc852znOIS9ccItRglzcFV0W6gnMF4rflN+MhIgQ4+9jN7jgeCoGIYOHe/naH43Z/VRCKUN/c45DL5VJOvqEDYjjAUUJXfjawEBEgpA55NqcEtj4Ayc/ncDpKOMNy+WOz/Q3hJ+5xOLI5TAiYkhIDZgYDk8kZdtCzCyR45CeHY2fHIkh8PFYlkI4OJnPRIubObMd/fIYmf4a+Mjs7P94TqhKEGR+fCd2c4Wyl1xCeIq8OSw2ZdGjDXLeOiUUbHupoHvbWIdzi7LA0bcJxT8y3hsXHD3+Q5B2YsEc6/JAfgeYXUqnhIiog6VRejMWl5H+tdA+QqKxDKv2GNm7S3JzfllR2886dfBzl/szMG9bDfJr5SmqA/8l7bQeam70ET6tZPT2zimGYTqWtra0uFaG9Smi00UOj5PTp6mZ6ajRRKuMHmqoYjzzywSk6u9FziSjZ3TklHxglBwYylUo3gY87+JqMpoEkhqH6W+TOowMDD3raKCxjlMzIyNDw78CGInx+kyRDgsm76JN3cHaTsdnJE5/DzdwLaKNklJRIJE18vo9wQADpABImwdGcRhNbN0rehuQUoI3dFJFw+F9gguelrus+ceJEEmOdpgxFwVe9sOGEyrBuHEs5TXC7To1nhola3WuxWIDs105EaGXm293dJpM6zIIjgSMqyLYAgU6vWu0hGgtNciRhxxHaIzdBdzIV9aMIJU+dPHmUpHag8RItfGkxJTG0vb05CxCaeB/eOhwyNRmhedUxMTF7SWoPWi+pmwx7oIjJZLmBRCi1cOP6p8vvvwWaZ0wulwtIeDiQOjeZXb09xmQywcS0JhOMh5mhEL4c7yE0K7aH18NzufaSMTgvVM+myGeaVU3P7PpnLxy+iZrP/gWeazivOgKnh5dLunBGNJ9R5DbN9u0jI8/sAoLFjh0u3i20WPisQjGkOAwml+RBLdcLmtso8rGmYu32kTwghZTg8TbwEncjVLXQmWKzpaQoFBERuWRPD4/Hq9B8TJF0TeG511flHUxiiGkQEcF7ZSXM6pXVtuhoyihySSjV0yPOSadIg1b72to3DmICYsOGCIWinp7YlOjoyGiqEBCoFaHVNtAnebn2tXP1B3VJjPM7cAnF0JAq8TRC5tT6SAhVKJeEUopw7XJ8kt+H49eeO/djns7MOI9LDA3dabOtgBPwPWyf5TY0WaWFoy/Dv+T05eK1FPnThggarFhzBqEFWTh0oVwyBSJenu758RcWvv5jnsrMuBfAnbYVa9ZEbgXyNza7he02aZi4Cgu9/5efxRVv7Ao3M5wU2Lo1i82OAmI0Gj0mjYyOjs4T/48mYBrE50dUq82Mg7Rgs9lGTAjCa9LIyEibWNzgu138Kg4/dNjM0MGcVN/v27cvkcDE7jOYqMS/eu4wBXACzjsjbUBgTvpKuCBVdjhjM+yUMbaAwaSzIt3/1ldRcThyLkMFB6FrRa2LZ3Ax4XpMSxaQJyo6A+6W/63XZc1lHGppaRG2opUCgWAzJlwuGDy5ljQyS19/l49g01lUa2aktBiNqlY0NzERX/0ZAjAEQaG0SltnZ9Cd/+fO1RMu/GI0EsLvPH8WilDmxpffLVN1Pu5PwPyryPlyKzpDEH9Y4CNuc2Pst6i8qGjMI+mPztVzZqFUgqidEUS49yEUq3I+HkjgPDc4t7D/YkYLjXbb3ajy9Cwv4Zajsqm1TmfQs5Iqs0VmL1qMPh3iRt5dRp0xAQ53M2p90t6+5aVggo1eb+QKv0bXDQqMUYSH2FNR8hxurV4/5iGOyUt6mUDQfwp9fUhgtb6I0KdWq8C4ECU/zxUM6meOJdjodEaBAI7+Vr3V+mQl+sVqZf+AFjutArZOF2J1QZXRyaxWK7EeVf3DGjd1s8Bqm4f2DMLQoG5mKIKNUEjExcXB9C8+D59x/deheTL4NAqFIZc9mMwUyo7hRKFZc44dE+5B+2pxd1A4PzTBJiHBfgSnHP17SsJxlGrFHWNCQsAiLpDMT+g/4jaMixdocUSWMH88gk17u/0tKvCziqJbRHt74EoxiHxVIzpKZVLYTXTjqKjmq/EJNjU19qMBsdcMXmY56i4zyT9QZNvlCDYymd2f2GWy4IXyGLKtX3S9L5NE/dsuT7D5XFTqI6Wizy+/GqfLiFg+wuqfdiXiLrPMnVLRU2PfE4JJa1fXNChDi+tZomlXJrjMJk+ZUtGmK7+MUGQai7WsGLKMxYIiH13VK88mViMmpay/hygSgnyEy5wsXrKk+CTry66u96/mXQz2/ACrccmSRtYDoYqEIvCM/vJkX3Fx30koUnl1b3y4TF9jY1/oIiEJ3G4f7oM8HFKM+1754dKlH3ZdA8Fm6dJxxPjkzTevjVwK/d76e5NL44vfk1waV/w/5DcBBgB/8J1E07swiQAAAABJRU5ErkJggg==";
-        let iconNIAImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABkAAAAjCAMAAABW1lGaAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyBpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMC1jMDYwIDYxLjEzNDc3NywgMjAxMC8wMi8xMi0xNzozMjowMCAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNSBXaW5kb3dzIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjYwNjY2NkU1OEQ1NDExRUM5NkJCRjZCMUJEMzZDRjhCIiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjYwNjY2NkU2OEQ1NDExRUM5NkJCRjZCMUJEMzZDRjhCIj4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6NjA2NjY2RTM4RDU0MTFFQzk2QkJGNkIxQkQzNkNGOEIiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6NjA2NjY2RTQ4RDU0MTFFQzk2QkJGNkIxQkQzNkNGOEIiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz7dJxmMAAACzVBMVEUjISElIyMkIiImJCT9/f1FQ0OHhoYfHR3g4ODo6OiRkZH8/Pz5+fl2dXWWlpZzcnLV1dU5NzfZ2dne3t7S0tIgHh66urqgoKBBQEA5ODijo6M/Pj6SkZGEhIQyMDC7u7tHRka0tLQnJSVjYWE2NDRlZGR1dHRIR0cvLS3n5+eXlpaXl5dNS0vj4+OIh4dAPz+VlJTIyMiRkJDi4uJmZWVjYmJKSUn6+vry8vL39/dYV1e3t7fr6+uenZ3FxcV0c3P09PS5ubl9fX19fHzb29vv7+9/fn57enru7u69vb3MzMxpaGglIiKgn58zMTFubW2CgoKfnp55eHienp5dXFzLy8tOTEzDw8NRUFCJiIhsa2uTkpJ3dna2tbWrq6skISHPz8+dnZ2+vr6tra1aWVmxsbEqKCiAf39qaWmYl5cxMDCysbE3NTXHx8dAPj7T09OOjo6Li4t+fX0yMTGEg4NFRESBgYF4d3dQT0+pqakoJydzcXGpqKh8e3vh4eGNjIyUlJSSkpJCQUFwcHBMSkomIyN3dXVxcXFramrR0dF5eXlPT098fHyBgIBVVFTBwcGurq6vrq5+fn41NDTt7e0nJCRUUlK8vLw4Njbz8/MsKytnZWXd3d2ZmJhgX1+joqKioaF4eHiZmZmYmJiLiopWVVVCQEBra2ttbW3a2tplY2PMy8s+PDzAwMCHh4ePj4+lpKQxLy9SUVHY2NhhYGCqqalta2tGRERPTU23traIiIiFhIT29vbq6urOzs77+/u4uLivr6/s7Oynp6fl5eXc3Nx6enpaWFhJR0crKSlDQUFHR0dJSEjQ0NCKiopubm4uLCyUk5NISEhZWFhbWlqAgICamZnW1tY0MjI6ODjk5OQoJiY9Oztwbm6GhYWMjIxycXGQj4/f39+Dg4NcW1tkZGRLSUkoJSWzs7M7OTnExMQtKys6OTnp6en///9TJyyxAAAA73RSTlP/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////AOc7XCIAAAJUSURBVHjaZNFlVyMxFAbgZGbqRqGFIoVSoKW4uzuLu/u6u7u7u7u7u7u7u+v9DTtpy56lc7/ck3lObt5J0GnHpGgg9awkfWrQEQdoL9QqOKbrIYVdcfnPjb8FgpHbw9sl82tNVXnnT7R3lRSYeCWFlfOsAvbu6+E97ZprXp5diSjfTlaBK5ox7uJu1hnFGFE3U8ySsMAt8pt3/1EOMWY5RCM0xd8sL4ZkzZFFLeEZt1b63G0QRvelEKWTENl8W14w+Yzsep+X58XbAlwfvsIUooWWBIYDiyDjqnMbGSFaFhQRjGgnSwKYdB/WeSb9UMQSuxbJr5upmdVmFi02tYaAqFzHxl2NMeX7+GMjbxWRC3on4WC2+yvfQRlGCOG193iviYh+7XbIIpPslsa5UghRPCe5Zw4R8KF9Nlh+dJwzu6fJuZc1AYygcW8SNOVJgH99V+zbXN1ilbGVg/Byw77SYEzhWvmjwtDM4x4WYbJzjZgt9owmemD4mmqvozyJWaDu54zhPdnviHLPhvQM5rtMzFik4qTJTVXI3piXy/zYaZL2V2BLajAthEQ9pnMSKzzk8J/AgNC3KxbnefFhqEir6iB7WvzsSJfMDqxnOkjMqQIP0v/sddwEHQTCHlwi7Y7fh3424pi2kbQT47WMjSQk15C2P80FbAT4b5rZDBO67+BI/JanRSUwTAHcPTdCAnd+vuXCFXHjF5WM1l/mSlmqW553Pu3HESaVfziiaK7CU2or53gTNbWlB6d3EXKmFasFarUg6iL3HBidHNZgz/xbwl8BBgDuOAycGNtEuwAAAABJRU5ErkJggg==';
-        let iconNIARetImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAABFCAMAAAA/xkX6AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyBpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMC1jMDYwIDYxLjEzNDc3NywgMjAxMC8wMi8xMi0xNzozMjowMCAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNSBXaW5kb3dzIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjZDMDM3Qjk3OEQ1NDExRUM5OThCRTcxNUJGREQ0Q0IwIiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOjZDMDM3Qjk4OEQ1NDExRUM5OThCRTcxNUJGREQ0Q0IwIj4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6NkMwMzdCOTU4RDU0MTFFQzk5OEJFNzE1QkZERDRDQjAiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6NkMwMzdCOTY4RDU0MTFFQzk5OEJFNzE1QkZERDRDQjAiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz5LtOnnAAADAFBMVEVMSko0MjKTkpIbGRliYWEsKiqZmJhCQECDgoIuLCx7eno3NTUqKCgyMTFQT09ZWFg4NjZFQ0NRUFCLiopvbm6hoKA+PDx+fn6zs7Ovr69lZGQ8OjppaWmRkJBKSEhzc3OJiIhbWlpubGx9fHxmZWVXVlZiYmJxcHCenp5OTU1oZ2daWlpUU1NraWlWVlZ5eXl4d3d2dXVPT09APz9gXl5SUVFrampaWVksLCwjISElIyMkIiImJCQnJSUoJiYwLi79/f38/PwlIiImIyM/Pj7n5+fz8/Pg4ODLy8vc3Nzl5eUxLy8pJyfw8PDm5ubY2Nj7+/vq6uo7OTnGxsabm5tfXV1WVVUnJCRhYGDZ2dm/v7/b29v39/fOzs7f39+pqamGhYXe3t74+Pjs7OzT09PR0dE6ODiAgICFhITj4+Py8vLDw8O2trZHRkaioqLExMSxsbHv7++cnJxkY2OamZlGRUX5+fna2tri4uLBwcE5ODiPj49GRESrqqrJyMj6+vpfXl7Nzc3V1dWOjo6lpaWHhoaHh4empqaNjIytra2jo6Px8fHk5OTKyspNTEy3t7fS0tLh4eHCwsLt7e2Mi4vAwMDU1NSrq6vo6OhBQEBJSEign5+0tLT19fWVlZU6OTmEg4OCgYFeXV2dnZ3p6emko6Oop6coJSV8e3tTUlKBgYGnp6dWVFRXVVWSkZFwb29IR0d3dna9vb16eHjr6+tVVFRdXFwzMjJsa2v29vbQ0NDPz890dHTFxcWqqqrIyMjHx8eXl5fMzMywsLCqqamkpKTW1tbJycnX1taWlpaXlpaVlJTq6emFhYWNjY2trKxHRUWioaGsq6vn5uYmJiaAf3+enZ2ysbGura2KiYni4eEkISFycXHW1dWOjY0qJyecm5sjIiI7OjqWlZVtbGzDwsLQ0dHPzs63trY9Ozu8u7spJiZnZmbMy8sgHh5DQkKPjo6oqKipqKilpKTu7u4vLS22tbWGhob09PSBgICUlJSEhISmpaWMjIzX19f///9LIrQaAAABAHRSTlP///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8AU/cHJQAABg9JREFUeNqM13dcU0ccAPCE8sAQwhKhRaZCEWpblaJ9d/eSEPbeS/ZGkL3BvScu3Av33op7763tp9XuPezQLrvbXy+LvKQCuX/y7u7zzd393t3vEgE8q4S8O+WrhU0xx5/ZKYC5w3e4PQjhNRW6Wz19/Bwtj4WjkmKeRW5yiBCb6fM0DaOtOaQqmGUxQqJDY/5PaonNVCvEiXbeotXQOoRR1Crvtvq//DmKqJKZyQ1JfALaC2GDGE5yQ75GqGC5fhnqrixrxCoLSo43IDAWBf4NMK9UFugnwiy6ruvcoDEVeQYE1gVyy+lHjQ/G67Epv3e72mDbCAMCuancJToah9tNtp3gk/wRWD1OSr4BgU4UeLlZjMXZHh76Sx2tHoZFnYYEXBSMw3uKrzdLZxtE1Fo9DPttmB4JWBJcU4JZ7As5TLwBua8dJk1H5HdNzWWEtUQYF+95JPvwx6qMaB4Jt1QTlpvcTYYjLBWb729wNRcpMKvgOIIkAueOh4VzVf0BtpqZocHdRKAYoYx6ROyiKf4ITzLzTglikAraHajMCoEXNQSba4MmKE8INJ+WD06fCLPl9oFSM4C4+JNncuvGMYTjkDB5pYawqKh7+c2+hEt45xFuLQMYEkU2Bqs75CtarjvbRhHSTZbzIlY00pJj8SqAibFVA0nCUt3i5c0Pco+IVLuaRf313kvMBox96KfV6pAuInXhR/laeEyiu4CjATXPWcJ/lQsRrqB73Os7kHdwpIt3RnZgQeni+OxpyQwhkmFXdKSQYHENwKBXlJvkUap4jVb8noDpQYusG7+ioNIHEem+CC2JeMqihQAz/JSVw56IDCtTd5xQrZ4yJrkIrjp/RFrDNKRxJUZJALuOqpPAHBl5ck71VK/ZMCxL3qDVJgFq1xCoU+AUgC+koepq027C3c6kD17aGLPYYuofbqatyFZLahGLTkNoVJWmHmDCENf5cIFjuwnHcampxDVRS5oYFntApnCOLjfZEWnbMd0gL981O79lQXqcdvkAk+ixr4V7Jbrwxt18vfvV0zc51eCIAWyh62Qm29fxX2NEWqBuFPSPIVkkos0OKT48EfxD/NhiTcSwW/K2DQZEdWQxHqhLtentRFy9tlOqUJELcR7cdgNSj5TRwU7p6mpBm4yebeQRmtdFdyVuB1i7kcvVJ7GME6M0jLX75Z/veEo0KSxqRuPScQj70zNRZpdaqUdgXEm1VJ2GNVlcE6rWnIn3iwnzagYEr48q0iPTE6D8U11UdaGygJrDf9pw0rTRScRZj2SR+VAwChsgvL8FJvolQdkcV8JZBtrpkYAgurohkjTEA8hSQi+lRKJMfPL5pV5e5XoEtlcAtAijfxLp1jHY3Zx2WNgaZn5taZGmQ7MoC8plWtEB9jRJBzjM6IlkttZD4/ocgPGae+UYgI8jwISoop4I7DsCYFdKHzxUU2NiIdNmJoBjA/RIxoqC4X1lvr5PMD27Q+ndyYTRsHT0TKKFy+H8OOWGfM1q6A6fF2jqkN2CCdJlPRMw9YSDQn7iNwsCGLwKeiGXxI1jZB/wGk550Hm59EY2S5ZC8fO8Bn9HuEqj0AsB62FgNYt3lgdOA8d26JVs8oN9zrrqPNlk8FvXO1kUGZ7EazodGXJSFN47ASuTs8Vru2sD/KDECvogLnahQt3XWrwE5vV9kSvCKQ7f6KLRGRuZ3RcBQaW1br1BF/sPhT7JbadTbtrnFcKzgtq+SdiTt3aDmXpXhbUuEI/pmwS0e1fAKOZAAX3e5brTGvom0OnzpMB7ZpqwGqBfl88AI0j6b+LIZY5rYBZ3CHz3rIwwglQTjizY+zYkYrTxXqQnGEESGx62+n42C85h5aU62xgS7hedmUamq1NGZIwx5Jegf0HuZQ32SoJXG0OgYciXE0yYNokqux7NNoZ8HmRLRjDKX/Esksk2GUHyCt+Mlmztf8hk5sGguvwAYyZmxdrcCfL9PutaaJ7w47iMi5qfR72RNAWLVLcSS7CISTkT0fcoqwnvbnkabszEjk/SXJL07pNsBaOCDL8q/yIR25E3qqLBSAKLZy/OmAs9lv8EGABOhZUW9FXKKwAAAABJRU5ErkJggg==';
-
-
-        plugin.playerTracker.iconEnl = L.Icon.Default.extend({options: {
-            iconUrl: iconEnlImage,
-            iconRetinaUrl: iconEnlRetImage
-        }});
-        plugin.playerTracker.iconEnlSur = L.Icon.Default.extend({options: {
-            iconUrl: iconEnlSurImage,
-            iconRetinaUrl: iconEnlSurRetImage,
-        }});
-        plugin.playerTracker.iconRes = L.Icon.Default.extend({options: {
-            iconUrl: iconResImage,
-            iconRetinaUrl: iconResRetImage
-        }});
-        plugin.playerTracker.iconResSur = L.Icon.Default.extend({options: {
-            iconUrl: iconResSurImage,
-            iconRetinaUrl: iconResSurRetImage,
-        }});
-        plugin.playerTracker.iconNIA = L.Icon.Default.extend({options: {
-            iconUrl: iconNIAImage,
-            iconRetinaUrl: iconNIARetImage,
-            iconSize: [25,35],
-        }});
-
-        plugin.playerTracker.drawnTracesEnl = new L.LayerGroup();
-        plugin.playerTracker.drawnTracesRes = new L.LayerGroup();
-        plugin.playerTracker.drawnTracesNIA = new L.LayerGroup();
-        // to avoid any favouritism, we'll put the player's own faction layer first
-        if (PLAYER.team == 'RESISTANCE') {
-            window.layerChooser.addOverlay(plugin.playerTracker.drawnTracesRes, 'Player Tracker Resistance');
-            window.layerChooser.addOverlay(plugin.playerTracker.drawnTracesEnl, 'Player Tracker Enlightened');
-        } else {
-            window.layerChooser.addOverlay(plugin.playerTracker.drawnTracesEnl, 'Player Tracker Enlightened');
-            window.layerChooser.addOverlay(plugin.playerTracker.drawnTracesRes, 'Player Tracker Resistance');
-        }
-        window.layerChooser.addOverlay(plugin.playerTracker.drawnTracesNIA, 'Player Tracker Niantic');
-
-        map.on('layeradd',function(obj) {
-            if(obj.layer === plugin.playerTracker.drawnTracesEnl || obj.layer === plugin.playerTracker.drawnTracesRes) {
-                obj.layer.eachLayer(function(marker) {
-                if(marker._icon) window.setupTooltips($(marker._icon));
-                });
-            }
-        });
-
-        plugin.playerTracker.playerPopup = new L.Popup({offset: L.point([1,-34])});
-
-        // オプション値読み込み
-        window.plugin.playerTracker.loadOption();
-
-        //---- PANEL
-        if (window.useAndroidPanes()) {
-            android.addPane('plugin-player-tracker-scops', 'Player足跡', 'ic_action_user');
-            addHook('paneChanged', window.plugin.playerTracker.onPaneChanged);
-        } else {
-            $('#toolbox').append('<a onclick="window.plugin.playerTracker.playerTrackerDialog();return false;">Player足跡</a>');
-        }
-
-        addHook('publicChatDataAvailable', window.plugin.playerTracker.handleData);
-
-        window.map.on('zoomend', function() {
-            window.plugin.playerTracker.zoomListener();
-        });
-        window.plugin.playerTracker.zoomListener();
-
-        plugin.playerTracker.setupUserSearch();
-    }
-
-    // Android Panel
-    window.plugin.playerTracker.onPaneChanged = function(pane) {
-        if(pane == 'plugin-player-tracker-scops') {
-            window.plugin.playerTracker.playerTrackerDialog();
-        } else {
-            $("#playerTrackerDialog").remove();
-        }
+    const LABEL_CIMBINE_DISTANCE = 20; // px
+    /////////////////////////////////////////////////////////////////////////////
+    // setting values
+    const VerticalAlign = {
+      Top: 'top',
+      Middle: 'middle',
+      Bottom: 'bottom',
+    };
+    const HorizontalAlign = {
+      Left: 'left',
+      Center: 'center',
+      Right: 'right',
+    };
+    const RemarksFilter = {
+      None: 'none',
+      Remark: 'remark',
+      NotRemark: 'notRemark',
+      Highlight: 'highlight',
+      NotHighlight: 'notHighlight',
+      RemarkExceptHighlight: 'remarkExceptHighlight',
     };
 
-    // Option Dialog
-    window.plugin.playerTracker.playerTrackerDialog = function() {
-        var html = $('<div>');
-        html.append($('<label>' , {
-            class : 'info-text',
-            text : '時間範囲:',
-            for : 'player-tracker-scops-opt-priod'
-        }));
-        var select_priod = $($('<select>', {
-            value : 3 ,
-            id : 'player-tracker-scops-opt-priod'
-        }))
-        .append($('<option>').val(0.25).text("15分"))
-        .append($('<option>').val(0.5).text("30分"))
-        .append($('<option>').val(1).text("1時間"))
-        .append($('<option>').val(3).text("3時間"))
-        .append($('<option>').val(6).text("6時間"))
-        .append($('<option>').val(12).text("12時間"))
-        .append($('<option>').val(24).text("24時間"));
-        html.append(select_priod);
-        html.append('<br>');
-        html.append($('<label>' , {
-            class : 'info-text',
-            text : '位置履歴数:',
-            for : 'player-tracker-scops-opt-history'
-        }));
-        let select_history = $($('<select>', {
-            value : 6 ,
-            id : 'player-tracker-scops-opt-history'
-        }))
-        .append($('<option>').val(2).text("2履歴"))
-        .append($('<option>').val(3).text("3履歴"))
-        .append($('<option>').val(5).text("5履歴"))
-        .append($('<option>').val(10).text("10履歴"))
-        .append($('<option>').val(20).text("20履歴"));
-        html.append(select_history);
-        html.append($('<p>').text('※COMMのAllを過去にさかのぼって表示すると、過去追跡が可能です'));
-        html.append($('<label>' , {
-            class : 'info-text',
-            text : '要注意エージェント設定:',
-            for : 'player-tracker-scops-opt-surveillance-agents'
-        }));
-        html.append($('<textarea>', {
-            id : 'player-tracker-scops-opt-surveillance-agents'
-        }));
-        html.append($('<br />'));
-        html.append($('<label>' , {
-            class : 'info-text',
-            text : '除外エージェント設定:',
-            for : 'player-tracker-scops-opt-exclude-agents'
-        }));
-        html.append($('<textarea>', {
-            id : 'player-tracker-scops-opt-exclude-agents'
-        }));
-        html.append($('<p>').text('※エージェントごとに改行で区切ってください'));
-        if(('Notification' in window)){
-            if(Notification.permission === 'denied' || Notification.permission === 'default') {
-                html.append($('<button>', { id:'enableNotification' }).text('通知許可')
-                            .on('click', function(e){
-                    Notification.requestPermission(function(permission) {});
-                }));
-            }
-        }
+    const SETTING_DEFAULT = {
+      separateLayerFlag: false,
+      labelFontSize: 12, // label font size (px)
+      labelVerticalAlign: VerticalAlign.Top,
+      labelHorizontalAlign: HorizontalAlign.Center,
+      // labelFilterByRemarkPlayer: RemarksFilter.None,
+    };
+    var setting_ = {};
+    /////////////////////////////////////////////////////////////////////////////
+    // setup
+    /////////////////////////////////////////////////////////////////////////////
+    var setupRetryCount_ = 0;
+    var setupStarted_ = false;
 
-
-        if (window.useAndroidPanes()) {
-             $('<div>' , {
-                id : 'playerTrackerDialog',
-                class : 'mobile'
-             }).append(html).appendTo(document.body);
-            $('#player-tracker-scops-opt-priod').val(OptionData.priod);
-            $('#player-tracker-scops-opt-history').val(OptionData.history);
-            $('#player-tracker-scops-opt-surveillance-agents').val(OptionData.surveillance.join('\n'));
-            $('#player-tracker-scops-opt-exclude-agents').val(OptionData.excluded.join('\n'));
+    playerTrackerLabel.setup = function () {
+      // wait for initialization of a PlayerTracker plug-in.
+      if (setupStarted_) {
+        console.log('playerTrackerLabel:allready initialized.');
+        return;
+      }
+      console.log('playerTrackerLabel:setup:start.');
+      if (!checkPluginsReferencedBySetupIsLoded()) {
+        setupRetryCount_++;
+        if (setupRetryCount_ <= 20) {
+          console.log('playerTrackerLabel:setup:This plugin requires player tracker.. retry...');
+          setTimeout(window.plugin.playerTrackerLabel.setup, 500);
         }
         else {
-            dialog({
-                html: html,
-                id: 'playerTracker-options',
-                title: 'Player足跡設定',
-                focusCallback: function() {
-                    $('#player-tracker-scops-opt-priod').val(OptionData.priod);
-                    $('#player-tracker-scops-opt-history').val(OptionData.history);
-                    $('#player-tracker-scops-opt-surveillance-agents').val(OptionData.surveillance.join('\n'));
-                    $('#player-tracker-scops-opt-exclude-agents').val(OptionData.excluded.join('\n'));
-                },
-                buttons: {
-                    'OK' : function() {
-                        OptionData.priod =$('#player-tracker-scops-opt-priod').val();
-                        OptionData.history =$('#player-tracker-scops-opt-history').val();
-                        OptionData.surveillance = $('#player-tracker-scops-opt-surveillance-agents').val().split('\n');
-                        OptionData.excluded = $('#player-tracker-scops-opt-exclude-agents').val().split('\n');
-                        window.plugin.playerTracker.saveOption();
-
-                        window.plugin.playerTracker.discardOldData();
-                        window.plugin.playerTracker.drawnTracesEnl.clearLayers();
-                        window.plugin.playerTracker.drawnTracesRes.clearLayers();
-                        window.plugin.playerTracker.drawnTracesNIA.clearLayers();
-                        window.plugin.playerTracker.drawData();
-
-                        $(this).dialog('close');
-                    },
-                    'Cancel':  function() { $(this).dialog('close'); }
-                }
-            });
+          console.log('playerTrackerLabel:setup:This plugin requires player tracker.');
         }
+        return;
+      }
+      setupStarted_ = true;
+
+      // Initialize this plugin ///
+      // local strage
+      setupStorage();
+      setting_ = loadSetting();
+
+      // setting
+      if (setting_.separateLayerFlag) {
+        console.log('playerTrackerLabel:separateLayerFlag mode');
+      }
+      console.log('playerTrackerLabel:font:' + setting_.labelFontSize + ' vert:' + setting_.labelVerticalAlign + ' Hor:' + setting_.labelHorizontalAlign);
+      // console.log('playerTrackerLabel:filter:' + setting_.labelFilterByRemarkPlayer);
+
+      // style sheat
+      $('<style>').prop('type', 'text/css').html(''
+        + '.playerTrackerLabel {'
+          + 'color:black;'
+          + 'font-size:' + setting_.labelFontSize + 'px;'
+          // + 'line-height:' + (setting_.labelFontSize + 1) + 'px;'
+          + 'line-height:' + (setting_.labelFontSize) + 'px;'
+          + 'text-align:center;'
+          + 'margin:0; padding:0px;'
+          // + 'padding:' + LABEL_PADDING + 'px;'
+          + 'overflow:visible;'
+          //+ 'overflow:hidden;'
+          + 'white-space:nowrap;'
+          //+ 'border-style:solid;border-width:thin;'
+          + 'pointer-events:none;'
+        + '}'
+        + '.playerTrackerLabel-textbox {'
+          + 'position: relative;'
+          + 'width: 100%;'
+          + 'height: 100%;'
+          + 'margin:0; padding:0;'
+          //+ 'border-style:solid;border-width:thin;'
+          + 'text-align: center;'
+        + '}'
+        + '.playerTrackerLabel-textbox-inner {'
+          + 'position: absolute;'
+          + 'width: 100%;'
+          + 'margin:0; padding:0;'
+          + 'text-align: '+ setting_.labelHorizontalAlign + ';'
+          // + 'text-align: center;'
+          //+ 'bottom: 0;'
+          //+ 'border-style:solid;border-width:thin;'
+        + '}'
+          // Enl: 92d181, 70cc43, 91DA6D, 01EE01
+          // Res: bec0f7, 969AF8, 9A9AFF, 00B7FF
+        + '.playerTrackerLabel-text-Enl {color:black; text-shadow:1px 1px #91DA6D,1px -1px #91DA6D,-1px 1px #91DA6D,-1px -1px #91DA6D, 0 0 5px #91DA6D;}'
+        + '.playerTrackerLabel-text-Res {color:black; text-shadow:1px 1px #9A9AFF,1px -1px #9A9AFF,-1px 1px #9A9AFF,-1px -1px #9A9AFF, 0 0 5px #9A9AFF;}'
+  //      + '.playerTrackerLabel-text-Enl {color:black; text-shadow:1px 1px #92d181,1px -1px #70cc43,-1px 1px #92d181,-1px -1px #92d181, 0 0 5px #92d181;}'
+  //      + '.playerTrackerLabel-text-Res {color:black; text-shadow:1px 1px #bec0f7,1px -1px #bec0f7,-1px 1px #bec0f7,-1px -1px #bec0f7, 0 0 5px #bec0f7;}'
+        + '.playerTrackerLabel-text-Enl-highlight {color:red; text-shadow:1px 1px #91DA6D,1px -1px #91DA6D,-1px 1px #91DA6D,-1px -1px #91DA6D, 0 0 5px #91DA6D;}'
+        + '.playerTrackerLabel-text-Res-highlight {color:red; text-shadow:1px 1px #9A9AFF,1px -1px #9A9AFF,-1px 1px #9A9AFF,-1px -1px #9A9AFF, 0 0 5px #9A9AFF;}'
+  //      + '.playerTrackerLabel-text-Enl-highlight {color:red; text-shadow:1px 1px #92d181,1px -1px #70cc43,-1px 1px #92d181,-1px -1px #92d181, 0 0 5px #92d181;}'
+  //      + '.playerTrackerLabel-text-Res-highlight {color:red; text-shadow:1px 1px #bec0f7,1px -1px #bec0f7,-1px 1px #bec0f7,-1px -1px #bec0f7, 0 0 5px #bec0f7;}'
+
+        // dialog
+        + '.playerTrackerLabel-dialog-groupDiv { margin:10px auto; } '
+        + '.playerTrackerLabel-dialog-linkButton { display:inline-block; color:#ffce00; border:1px solid #ffce00; padding:2px 5px; margin:10x auto; text-align:center; background:rgba(8,48,78,.9); }'
+        + '.playerTrackerLabel-dialog-linkButtonBlock { display:block; color:#ffce00; border:1px solid #ffce00; padding:3px 0; margin:10px auto; width:80%; text-align:center; background:rgba(8,48,78,.9); }'
+      ).appendTo('head');
+      // 7E81D5
+      
+      if (!window.plugin.playerTrackerCustomizer) {
+        // toolbox
+        $('#toolbox').append(' <a id="playerTrackerLabel-toolboxCommand" title="Player Label Options">Player Label</a>');
+        $('#playerTrackerLabel-toolboxCommand').click(toolboxUI);
+      }
+
+      // utility
+      setupUtility();
+
+      // layer
+      setupLayerGroup();
+
+      // hook
+      window.addHook('publicChatDataAvailable', handleData);
+      window.addHook('iitcLoaded', onIitcLoaded);
+
+      playerTrackerLabel.initialized = true;
+      // setup end
+      console.log('playerTrackerLabel:setup:Compleated.');
+    };
+    // setup
+    var setup = window.plugin.playerTrackerLabel.setup;
+
+    ///////////////////////////////////////////////////////////////////////////
+    // 
+    var onIitcLoaded = function() {
+      // Leaflet Event
+      if (setting_.separateLayerFlag) {
+        if (!window.useAndroidPanes()) {
+          window.map.on('layeradd', onLayerAdd);
+          window.map.on('layerremove', onLayerRemove);
+        }
+        window.map.on('zoomend', onZoomEnd);
+      }
     };
 
-    //  オプション値をロード
-    window.plugin.playerTracker.loadOption = function () {
-        let stream = localStorage.getItem(PLAYER_TRACKER_SCOPS_STORAGE_KEY);
-        let _data = (stream === null) ? {} : JSON.parse(stream);
-        if (!!!_data.priod) {
-            _data.priod = 3;
-        }
-        if (!!!_data.history) {
-            _data.history = 10;
-        }
-        if (!!!_data.surveillance) {
-            _data.surveillance = [];
-        }
-        if (!!!_data.excluded) {
-            _data.excluded = [];
-        }
-        OptionData.priod   = parseFloat(_data.priod,10);
-        OptionData.history = parseInt(_data.history,10);
-        OptionData.surveillance = _data.surveillance;
-        OptionData.excluded = _data.excluded;
+    ///////////////////////////////////////////////////////////////////////////// 
+    // Reference Plugin
+    ///////////////////////////////////////////////////////////////////////////// 
+    var checkPluginsReferencedBySetupIsLoded = function() {
+      return checkPlayerTrackerPluginLoded();
     };
-
-    // オプション値を保存
-    window.plugin.playerTracker.saveOption = function () {
-        let stream = JSON.stringify(OptionData);
-        localStorage.setItem(PLAYER_TRACKER_SCOPS_STORAGE_KEY,stream);
+    var checkPlayerTrackerPluginLoded = function() {
+      return window.plugin.playerTracker && window.plugin.playerTracker.drawnTracesRes && window.plugin.playerTracker.drawnTracesEnl;
     };
+    var checkRemarkPlayerPluginLoded = function() {
+      return window.plugin.remarkPlayer && window.plugin.remarkPlayer.initialized;
+    };
+    /////////////////////////////////////////////////////////////////////////////
+    // draw label
+    /////////////////////////////////////////////////////////////////////////////
+    playerTrackerLabel.drawData = function () {
+      if (!window.plugin.playerTracker) {
+        return;
+      }
+      var getLatLng = window.plugin.playerTracker.getLatLngFromEvent; // getLatLngFromEvent func
+      var ago = window.plugin.playerTracker.ago; // ago func
+      var isTouchDev = window.isTouchDevice();
+      var split = PLAYER_TRACKER_MAX_TIME / 4;
+      var now = new Date().getTime();
+      var labelDataList = [];
 
-    window.plugin.playerTracker.stored = {};
-
-    plugin.playerTracker.onClickListener = function(event) {
-        let marker = event.target;
-
-        if (marker.options.desc) {
-            plugin.playerTracker.playerPopup.setContent(marker.options.desc);
-            plugin.playerTracker.playerPopup.setLatLng(marker.getLatLng());
-            map.openPopup(plugin.playerTracker.playerPopup);
+      $.each(window.plugin.playerTracker.stored, function (plrname, playerData) {
+        // process each player
+        if (!playerData || playerData.events.length === 0) {
+          console.warn('broken player data for plrname=' + plrname);
+          return true;
         }
-    };
+        var evLength = playerData.events.length;
+        var last = playerData.events[evLength - 1];
+        var latlng = getLatLng(last);
+        var point = window.map.project(latlng);
+        var cls;
+        var text;
+        var remarkFlag = false;
+        var highlightFlag = false;
+        var remarkData = playerTrackerLabel.getRemarkPlayerData(plrname);
+        if (remarkData === null) {
+          // RemarkPlayer library is desable
+          text = plrname;
+          remarkFlag = false;
+          highlightFlag = false;
+        }
+        else {
+          // RemarkPlayer library is enable
+          remarkFlag = remarkData.remark;
+          if (remarkData.nameString) {
+            text = remarkData.nameString;
+          }
+          else {
+            text = plrname;
+          }
+          highlightFlag = remarkData.highlight;
 
-    // force close all open tooltips before markers are cleared
-    window.plugin.playerTracker.closeIconTooltips = function() {
-        plugin.playerTracker.drawnTracesRes.eachLayer(function(layer) {
-            if ($(layer._icon)) { $(layer._icon).tooltip('close');}
+          /*
+          // remark Filter
+          switch (setting_.labelFilterByRemarkPlayer) {
+            case RemarksFilter.Remark:
+              if (!remarkFlag) { return; }
+              break;
+            case RemarksFilter.NotRemark:
+              if (remarkFlag) { return; }
+              break;
+            case RemarksFilter.Highlight:
+              if (!highlightFlag) { return; }
+              break;
+            case RemarksFilter.NotHighlight:
+              if (highlightFlag) { return; }
+              break;
+            case RemarksFilter.RemarkExceptHighlight:
+              if (!remarkFlag) { return; }
+              if (highlightFlag) { return; }
+              break;
+            case RemarksFilter.None:
+            default:
+              break;
+          }
+          */
+        }
+        text = text + '(' + ago(last.time, now) + ')';
+        var width = measureTextWidth(text);
+  //      var width = measureTextWidth(text) + (LABEL_PADDING * 2);
+  //      var width = text.length * setting_.labelFontSize / 2 + LABEL_PADDING * 2;
+        var height = setting_.labelFontSize;
+        //console.log('font:' + setting_.labelFontSize + ', w:' + width + ', h:'+ height);
+        var textHtml = window.plugin.playerTrackerLabel.buildPlayerLabelHtml(text, playerData.team, highlightFlag);
+        var layer = (playerData.team === 'RESISTANCE' ? labelLayerRes_ : labelLayerEnl_);
+
+        // check and store overlapped data
+        var labelData = null;
+        var i, len = labelDataList.length;
+        for (i = 0; i < len; i++) {
+          var ld = labelDataList[i];
+          if (ld.team != playerData.team) { continue; }
+          if (ArrayIndexOf(ld.names, plrname) >= 0) {
+            continue;
+          }
+          if (ld.point.distanceTo(point) <= LABEL_CIMBINE_DISTANCE) {
+            //console.log("overlapping player:" + plrname);
+            //console.log(ld);
+            labelData = ld;
+            break;
+          }
+        }
+        if (labelData == null) { // first label on point
+          var names = [];
+          names.push(plrname);
+          labelData = {
+            id: 0,
+            html: textHtml,
+            names: names,
+            team: playerData.team,
+            latlng: latlng,
+            point: point,
+            height: height,
+            width: width,
+          };
+          labelDataList.push(labelData);
+        }
+        else { // same point label is exists
+          textHtml = labelData.html + '<br/>' + textHtml; // combine text
+          latlng = new L.LatLng(
+                    labelData.latlng.lat + (latlng.lat - labelData.latlng.lat)/(labelData.names.length + 1),
+                    labelData.latlng.lng + (latlng.lng - labelData.latlng.lng)/(labelData.names.length + 1)
+          );
+          point = window.map.project(latlng);
+          height = labelData.height + height;
+          width = (labelData.width > width) ? labelData.width : width;
+
+          labelData.html = textHtml;
+          labelData.names.push(plrname);
+          labelData.latlng = latlng;
+          labelData.point = point;
+          labelData.height = height;
+          labelData.width = width;
+
+          if (labelData.id > 0) {
+            layer.removeLayer(labelData.id); // remove previously drawn label
+          }
+        }
+        //console.log(labelData);
+
+        var vertical;
+        if (setting_.labelVerticalAlign === VerticalAlign.Bottom) {
+          vertical = 0;
+        }
+        else if (setting_.labelVerticalAlign === VerticalAlign.Middle) {
+          vertical = (PLAYER_TRACKER_MARCKER_HEIGHT + height) / 2 + 1;
+        }
+        else { // setting_.labelVerticalAlign === VerticalAlign.Top
+          vertical = PLAYER_TRACKER_MARCKER_HEIGHT + height + 1;
+        }
+        var horizontal;
+        if (setting_.labelHorizontalAlign === HorizontalAlign.Left) {
+          horizontal = 0;
+        }
+        else if (setting_.labelHorizontalAlign === HorizontalAlign.Right) {
+          horizontal = width;
+        }
+        else { // setting_.labelHorizontalAlign === HorizontalAlign.Center
+          horizontal = width / 2;
+        }
+        //console.log("v:" + vertical + ", h:"+ horizontal);
+        var marker = L.marker(latlng, {
+          icon: L.divIcon({
+            className: 'playerTrackerLabel',
+            html: window.plugin.playerTrackerLabel.buildMarkerHtml(textHtml),
+            iconAnchor: [horizontal, vertical],
+            iconSize: [width, height],
+          })
         });
-        plugin.playerTracker.drawnTracesEnl.eachLayer(function(layer) {
-            if ($(layer._icon)) { $(layer._icon).tooltip('close');}
-        });
-        plugin.playerTracker.drawnTracesNIA.eachLayer(function(layer) {
-            if ($(layer._icon)) { $(layer._icon).tooltip('close');}
-        });
-    }
+        layer.addLayer(marker);
+        labelData.id = layer.getLayerId(marker)
+        // window.registerMarkerForOMS(marker);
+        if (!isTouchDev) { window.setupTooltips($(marker._icon)); }
+      });
+      labelDataList = [];
+    };
 
-    window.plugin.playerTracker.zoomListener = function() {
-        let ctrl = $('.leaflet-control-layers-selector + span:contains("Player Tracker")').parent();
-        if(window.map.getZoom() < window.PLAYER_TRACKER_MIN_ZOOM) {
-            if (!window.isTouchDevice()) plugin.playerTracker.closeIconTooltips();
-            plugin.playerTracker.drawnTracesEnl.clearLayers();
-            plugin.playerTracker.drawnTracesRes.clearLayers();
-            plugin.playerTracker.drawnTracesNIA.clearLayers();
-            ctrl.addClass('disabled').attr('title', 'Zoom in to show those.');
-            //note: zoomListener is also called at init time to set up things, so we only need to do this in here
-            window.chat.backgroundChannelData('plugin.playerTracker', 'all', false);   //disable this plugin's interest in 'all' COMM
+    // handle data
+    playerTrackerLabel.buildPlayerLabelHtml = function(text, team, highlight) {
+      var textStyle = '';
+      if (highlight) {
+        textStyle = (team === 'RESISTANCE' ? 'playerTrackerLabel-text-Res-highlight' : 'playerTrackerLabel-text-Enl-highlight');
+      }
+      else {
+        textStyle = (team === 'RESISTANCE' ? 'playerTrackerLabel-text-Res' : 'playerTrackerLabel-text-Enl');
+      }
+      return '<span class="' + textStyle + '">' + text + '</span>';
+    };
+
+    playerTrackerLabel.buildMarkerHtml = function(playerLabel) {
+      return '<div class="playerTrackerLabel-textbox"><div class="playerTrackerLabel-textbox-inner"><span>' + playerLabel + '</span></div></div>';
+    };
+
+    // handle data
+    var handleData = function (data) {
+      if (!window.plugin.playerTracker) { return; }
+      if (window.map.getZoom() < window.PLAYER_TRACKER_MIN_ZOOM) { return; }
+      //console.log('playerTrackerLabel:handleData [count:' + Object.keys(window.plugin.playerTracker.stored).length + '].');
+      try {
+        if (setting_.separateLayerFlag) {
+          labelLayerEnl_.clearLayers();
+          labelLayerRes_.clearLayers();
+          if (window.useAndroidPanes()) {
+            checkAndFitChangePlayerTrackerLayerState();
+          }
+        }
+        playerTrackerLabel.drawData();
+      }
+      catch(e) {
+        console.log('playerTrackerLabel:handleData:error occurrd.');
+      }
+      //console.log('playerTrackerLabel:handleData end.');
+    };
+
+    var setupLayerGroup = function () {
+      if (setting_.separateLayerFlag) {
+        labelLayerEnl_ = new L.LayerGroup();
+        labelLayerRes_ = new L.LayerGroup();
+        // to avoid any favouritism, we'll put the player's own faction layer first
+        if (PLAYER.team === 'RESISTANCE') {
+          window.addLayerGroup(LAYER_NAME_RESISTANCE, labelLayerRes_, true);
+          window.addLayerGroup(LAYER_NAME_ENLIGHTENED, labelLayerEnl_, true);
         } else {
-            ctrl.removeClass('disabled').attr('title', '');
-            //note: zoomListener is also called at init time to set up things, so we only need to do this in here
-            window.chat.backgroundChannelData('plugin.playerTracker', 'all', true);    //enable this plugin's interest in 'all' COMM
+          window.addLayerGroup(LAYER_NAME_ENLIGHTENED, labelLayerEnl_, true);
+          window.addLayerGroup(LAYER_NAME_RESISTANCE, labelLayerRes_, true);
         }
-    }
-
-    window.plugin.playerTracker.getLimit = function() {
-        return Date.now() - window.PLAYER_TRACKER_MAX_TIME * OptionData.priod;
-    }
-
-    window.plugin.playerTracker.discardOldData = function() {
-        let limit = plugin.playerTracker.getLimit();
-        Object.keys(plugin.playerTracker.stored).forEach(function(plrname){
-            let player = plugin.playerTracker.stored[plrname];
-            let i;
-            let ev = player.events;
-            for(i = 0; i < ev.length; i++) {
-                if(ev[i].time >= limit) break;
-            }
-            if(i === 0) return true;
-            if(i === ev.length) return delete plugin.playerTracker.stored[plrname];
-            plugin.playerTracker.stored[plrname].events.splice(0, i);
-        });
-    }
-
-    window.plugin.playerTracker.eventHasLatLng = function(ev, lat, lng) {
-        let hasLatLng = false;
-        ev.latlngs.forEach(function(ll) {
-            if(ll[0] === lat && ll[1] === lng) {
-            hasLatLng = true;
-            return false;
-            }
-        });
-        return hasLatLng;
-    }
-
-    window.plugin.playerTracker.processNewData = function(data) {
-        let limit = plugin.playerTracker.getLimit();
-        data.result.forEach(function(json) {
-            // skip old data
-            if(json[1] < limit) return true;
-
-            // find player and portal information
-            let plrname,
-            plrteam,
-            lat,
-            lng,
-            name,
-            address;
-            let skipThisMessage = false;
-            json[2].plext.markup.forEach(function(markup) {
-                switch(markup[0]) {
-                    case 'TEXT':
-                        // Destroy link and field messages depend on where the link or
-                        // field was originally created. Therefore it’s not clear which
-                        // portal the player is at, so ignore it.
-                        if (
-                            markup[1].plain.indexOf('destroyed the Link') !== -1 ||
-                            markup[1].plain.indexOf('destroyed a Control Field') !== -1 ||
-                            // COMM messages changed a bit, keep old rules ↑ in case of rollback
-                            markup[1].plain.indexOf('destroyed the') !== -1 ||
-                            markup[1].plain.indexOf('Your Link') !== -1
-                        ) {
-                            skipThisMessage = true;
-                            return false;
-                        }
-                        break;
-                    case 'PLAYER':
-                        plrname = markup[1].plain;
-                        plrteam = markup[1].team;
-                        break;
-                    case 'PORTAL':
-                        // link messages are “player linked X to Y” and the player is at
-                        // X.
-                        lat = lat ? lat : markup[1].latE6/1E6;
-                        lng = lng ? lng : markup[1].lngE6/1E6;
-
-                        name = name ? name : markup[1].name;
-                        address = address ? address : markup[1].address;
-                        break;
-                }
-            });
-
-            // skip unusable events
-            // MACHINA team is NUTRAL
-            if (!plrname || !lat || !lng || skipThisMessage || ![window.TEAM_RES, window.TEAM_ENL].includes(window.teamStringToId(plrteam))) {
-                return true;
-            }
-            // 除外ユーザー
-            if(OptionData.excluded.includes(plrname)){
-                return true;
-            }
-
-            let newEvent = {
-                latlngs: [[lat, lng]],
-                time: json[1],
-                name: name,
-                address: address
-            };
-
-            let playerData = window.plugin.playerTracker.stored[plrname];
-
-            // short-path if this is a new player
-            if(!playerData || playerData.events.length === 0) {
-                plugin.playerTracker.stored[plrname] = {
-                    team: plrteam,
-                    events: [newEvent]
-                };
-                return true;
-            }
-
-            let evts = playerData.events;
-            // there’s some data already. Need to find correct place to insert.
-            let i;
-            for(i= 0; i < evts.length; i++) {
-                if(evts[i].time > json[1]) break;
-            }
-            let cmp = Math.max(i-1, 0);
-
-            // so we have an event that happened at the same time. Most likely
-            // this is multiple resos destroyed at the same time.
-            if(evts[cmp].time === json[1]) {
-                evts[cmp].latlngs.push([lat, lng]);
-                return true;
-            }
-
-            // the time changed. Is the player still at the same location?
-
-            // assume this is an older event at the same location. Then we need
-            // to look at the next item in the event list. If this event is the
-            // newest one, there may not be a newer event so check for that. If
-            // it really is an older event at the same location, then skip it.
-            if(evts[cmp+1] && plugin.playerTracker.eventHasLatLng(evts[cmp+1], lat, lng))
-                return true;
-
-            // if this event is newer, need to look at the previous one
-            let sameLocation = plugin.playerTracker.eventHasLatLng(evts[cmp], lat, lng);
-
-            // if it’s the same location, just update the timestamp. Otherwise
-            // push as new event.
-            if(sameLocation) {
-                evts[cmp].time = json[1];
-            } else {
-                evts.splice(i, 0,  newEvent);
-            }
-
-        });
-    }
-
-    window.plugin.playerTracker.getLatLngFromEvent = function(ev) {
-        //TODO? add weight to certain events, or otherwise prefer them, to give better locations?
-        let lats = 0;
-        let lngs = 0;
-        ev.latlngs.forEach(function(latlng) {
-            lats += latlng[0];
-            lngs += latlng[1];
-        });
-
-        return L.latLng(lats / ev.latlngs.length, lngs / ev.latlngs.length);
-    }
-
-    window.plugin.playerTracker.ago = function(time, now) {
-        let s = (now-time) / 1000;
-        let h = Math.floor(s / 3600);
-        let m = Math.floor((s % 3600) / 60);
-        let returnVal = m + 'm';
-        if(h > 0) {
-            returnVal = h + 'h' + returnVal;
-        }
-        return returnVal;
-    }
-
-    window.plugin.playerTracker.drawData = function() {
-        let isTouchDev = window.isTouchDevice();
-
-        let gllfe = plugin.playerTracker.getLatLngFromEvent;
-
-        let polyLineByAgeEnl = [[], [], [], []];
-        let polyLineByAgeRes = [[], [], [], []];
-        let polyLineByAgeNIA = [[], [], [], []];
-        let polyLineByAgeSurEnl = [[], [], [], []];
-        let polyLineByAgeSurRes = [[], [], [], []];
-
-        let split = (PLAYER_TRACKER_MAX_TIME * OptionData.priod) / 4;
-        let now = Date.now();
-        Object.keys(plugin.playerTracker.stored).forEach(function(plrname){
-            let playerData = plugin.playerTracker.stored[plrname];
-            if(!playerData || playerData.events.length === 0) {
-                console.warn('broken player data for plrname=' + plrname);
-                return true;
-            }
-
-            // gather line data and put them in buckets so we can color them by
-            // their age
-            for(let i = 1; i < playerData.events.length; i++) {
-                let p = playerData.events[i];
-                let ageBucket = Math.min(parseInt((now - p.time) / split), 4-1);
-                let line = [gllfe(p), gllfe(playerData.events[i-1])];
-
-
-                if(NIAPlayerName.includes(plrname)){
-                    polyLineByAgeNIA[ageBucket].push(line);
-                }else if(OptionData.surveillance.indexOf(plrname) >= 0){
-                    if(playerData.team === 'RESISTANCE'){
-                        polyLineByAgeSurRes[ageBucket].push(line);
-                    }else{
-                        polyLineByAgeSurEnl[ageBucket].push(line);
-                    }
-                }else{
-                    if(playerData.team === 'RESISTANCE'){
-                        polyLineByAgeRes[ageBucket].push(line);
-                    }else{
-                        polyLineByAgeEnl[ageBucket].push(line);
-                    }
-                }
-            }
-
-            let evtsLength = playerData.events.length;
-            let last = playerData.events[evtsLength-1];
-            let ago = plugin.playerTracker.ago;
-
-            // PLAYER_TRACKER_ALERT_SURVEILANCE_MSEC[ms]以内のイベント発生でポップとみなす
-            if(OptionData.surveillance.indexOf(plrname)>=0 && AgentsNoticed.indexOf(plrname) === -1 && last.time > (new Date()).getTime() - (PLAYER_TRACKER_ALERT_SURVEILANCE_MSEC)){
-                if(('Notification' in window) && Notification.permission === 'granted'){
-                    new Notification(plrname + ' が活動中です！', {
-
-                    });
-                }else{
-                    alert(plrname + ' が活動中です！');
-                }
-                AgentsNoticed.push(plrname);
-            }
-
-            // tooltip for marker - no HTML - and not shown on touchscreen devices
-            let tooltip = isTouchDev ? '' : plrname + ', ' + ago(last.time, now) + ' 前';
-
-            // popup for marker
-            let popup = $('<div>')
-            .addClass('plugin-player-tracker-popup');
-            $('<span>')
-            .addClass('nickname ' + (playerData.team === 'RESISTANCE' ? 'res' : 'enl'))
-            .css('font-weight', 'bold')
-            .text(plrname)
-            .appendTo(popup);
-
-            if(window.plugin.guessPlayerLevels !== undefined &&
-                window.plugin.guessPlayerLevels.fetchLevelDetailsByPlayer !== undefined) {
-                function getLevel(lvl) {
-                    return $('<span>')
-                    .css({
-                        padding: '4px',
-                        color: 'white',
-                        backgroundColor: COLORS_LVL[lvl],
-                    })
-                    .text(lvl);
-                }
-
-                let level = $('<span>')
-                    .css({'font-weight': 'bold', 'margin-left': '10px'})
-                    .appendTo(popup);
-
-                let playerLevelDetails = window.plugin.guessPlayerLevels.fetchLevelDetailsByPlayer(plrname);
-                level
-                    .text('Min level ')
-                    .append(getLevel(playerLevelDetails.min));
-                if(playerLevelDetails.min != playerLevelDetails.guessed)
-                    level
-                    .append(document.createTextNode(', guessed level: '))
-                    .append(getLevel(playerLevelDetails.guessed));
-            }
-
-            popup
-                .append('<br>')
-                .append(document.createTextNode(ago(last.time, now) + '前'))
-                .append('<br>')
-                .append(plugin.playerTracker.getPortalLink(last));
-
-            // show previous data in popup
-            if(evtsLength >= 2) {
-                popup
-                    .append('<br>')
-                    .append('<br>')
-                    .append(document.createTextNode('位置履歴:'))
-                    .append('<br>');
-
-                let table = $('<table>')
-                    .appendTo(popup)
-                    .css('border-spacing', '0');
-                for(let i = evtsLength - 2; i >= 0 && i >= evtsLength - 10; i--) {
-                    let ev = playerData.events[i];
-                    $('<tr>')
-                    .append($('<td>')
-                        .text(ago(ev.time, now) + '前'))
-                    .append($('<td>')
-                        .append(plugin.playerTracker.getPortalLink(ev)))
-                    .appendTo(table);
-                }
-            }
-
-            // marker opacity
-            let relOpacity = 1 - (now - last.time) / (window.PLAYER_TRACKER_MAX_TIME * OptionData.priod)
-            let absOpacity = window.PLAYER_TRACKER_MIN_OPACITY + (1 - window.PLAYER_TRACKER_MIN_OPACITY) * relOpacity;
-
-            // marker itself
-            //let icon = playerData.team === 'RESISTANCE' ?  new plugin.playerTracker.iconRes() :  new plugin.playerTracker.iconEnl();
-            let icon;
-            if(NIAPlayerName.includes(plrname)){
-                icon = new plugin.playerTracker.iconNIA();
-            }else{
-	            icon =
-	                OptionData.surveillance.includes(plrname)
-	                    ? playerData.team === "RESISTANCE"
-	                        ? new plugin.playerTracker.iconResSur()
-	                        : new plugin.playerTracker.iconEnlSur()
-	                    : playerData.team === "RESISTANCE"
-	                        ? new plugin.playerTracker.iconRes()
-	                        : new plugin.playerTracker.iconEnl();
-            }
-            // as per OverlappingMarkerSpiderfier docs, click events (popups, etc) must be handled via it rather than the standard
-            // marker click events. so store the popup text in the options, then display it in the oms click handler
-            let m = L.marker(gllfe(last), { icon: icon, opacity: absOpacity, desc: popup[0], title: tooltip });
-            m.addEventListener('spiderfiedclick', plugin.playerTracker.onClickListener);
-
-            // m.bindPopup(title);
-
-            if (tooltip) {
-                // ensure tooltips are closed, sometimes they linger
-                m.on('mouseout', function() { $(this._icon).tooltip('close'); });
-            }
-
-            playerData.marker = m;
-
-            //m.addTo(playerData.team === 'RESISTANCE' ? plugin.playerTracker.drawnTracesRes : plugin.playerTracker.drawnTracesEnl);
-            if(NIAPlayerName.includes(plrname)){
-                m.addTo(plugin.playerTracker.drawnTracesNIA);
-            }else{
-                m.addTo(playerData.team === 'RESISTANCE' ? plugin.playerTracker.drawnTracesRes : plugin.playerTracker.drawnTracesEnl);
-            }
-            window.registerMarkerForOMS(m);
-
-            // jQueryUI doesn’t automatically notice the new markers
-            if (!isTouchDev) {
-                window.setupTooltips($(m._icon));
-            }
-        });
-
-        // draw the poly lines to the map
-        polyLineByAgeNIA.forEach(function(polyLine, i) {
-            if(polyLine.length === 0) return true;
-
-            var opts = {
-                weight: 2-0.25*i,
-                color: PLAYER_TRACKER_LINE_COLOUR_NIA,
-                interactive: false,
-                opacity: 1-0.2*i,
-                dashArray: "5,8"
-            };
-
-            polyLine.forEach(function(poly) {
-                L.polyline(poly, opts).addTo(plugin.playerTracker.drawnTracesNIA);
-            });
-        });
-        polyLineByAgeEnl.forEach(function(polyLine, i) {
-            if(polyLine.length === 0) return true;
-
-            let opts = {
-                weight: 2-0.25*i,
-                color: PLAYER_TRACKER_LINE_COLOUR_ENL,
-                interactive: false,
-                opacity: 1-0.2*i,
-                dashArray: "5,8"
-            };
-
-            polyLine.forEach(function(poly) {
-                L.polyline(poly, opts).addTo(plugin.playerTracker.drawnTracesEnl);
-            });
-        });
-        polyLineByAgeRes.forEach(function(polyLine, i) {
-            if(polyLine.length === 0) return true;
-
-            let opts = {
-                weight: 2-0.25*i,
-                color: PLAYER_TRACKER_LINE_COLOUR_RES,
-                interactive: false,
-                opacity: 1-0.2*i,
-                dashArray: "5,8"
-            };
-
-            polyLine.forEach(function(poly) {
-                L.polyline(poly, opts).addTo(plugin.playerTracker.drawnTracesRes);
-            });
-        });
-        polyLineByAgeSurEnl.forEach(function(polyLine, i) {
-            if(polyLine.length === 0) return true;
-
-            var opts = {
-                weight: 2-0.25*i,
-                color: PLAYER_TRACKER_LINE_COLOUR_SUR_ENL,
-                interactive: false,
-                opacity: 1-0.2*i,
-                dashArray: "5,8"
-            };
-
-            polyLine.forEach(function(poly) {
-                L.polyline(poly, opts).addTo(plugin.playerTracker.drawnTracesEnl);
-            });
-        });
-        polyLineByAgeSurRes.forEach(function(polyLine, i) {
-            if(polyLine.length === 0) return true;
-
-            var opts = {
-                weight: 2-0.25*i,
-                color: PLAYER_TRACKER_LINE_COLOUR_SUR_RES,
-                interactive: false,
-                opacity: 1-0.2*i,
-                dashArray: "5,8"
-            };
-
-            polyLine.forEach(function(poly) {
-                L.polyline(poly, opts).addTo(plugin.playerTracker.drawnTracesRes);
-            });
-        });
-    }
-
-    window.plugin.playerTracker.getPortalLink = function(data) {
-        let position = data.latlngs[0];
-        return $('<a>')
-            .addClass('text-overflow-ellipsis')
-            .css('max-width', '15em')
-            .text(window.chat.getChatPortalName(data))
-            .prop({
-            title: window.chat.getChatPortalName(data),
-            href: window.makePermalink(position)
-            })
-            .click(function(event) {
-            window.selectPortalByLatLng(position);
-            event.preventDefault();
-            return false;
-            })
-            .dblclick(function(event) {
-            map.setView(position, DEFAULT_ZOOM);
-            window.selectPortalByLatLng(position);
-            event.preventDefault();
-            return false;
-            });
-    }
-
-    window.plugin.playerTracker.handleData = function(data) {
-        if(window.map.getZoom() < window.PLAYER_TRACKER_MIN_ZOOM) return;
-
-        plugin.playerTracker.discardOldData();
-        plugin.playerTracker.processNewData(data);
-        if (!window.isTouchDevice()) plugin.playerTracker.closeIconTooltips();
-
-        plugin.playerTracker.drawnTracesEnl.clearLayers();
-        plugin.playerTracker.drawnTracesRes.clearLayers();
-        plugin.playerTracker.drawnTracesNIA.clearLayers();
-        plugin.playerTracker.drawData();
-    }
-
-    window.plugin.playerTracker.findUser = function(nick) {
-        nick = nick.toLowerCase();
-        let foundPlayerData = false;
-        Object.keys(plugin.playerTracker.stored).forEach(function(plrname){
-            let playerData = plugin.playerTracker.stored[plrname];
-            if (plrname.toLowerCase() === nick) {
-            foundPlayerData = playerData;
-            return false;
-            }
-        });
-        return foundPlayerData;
-    }
-
-    window.plugin.playerTracker.centerMapOnUser = function(nick) {
-        let data = plugin.playerTracker.findUser(nick);
-        if(!data) return false;
-
-        let last = data.events[data.events.length - 1];
-        let position = plugin.playerTracker.getLatLngFromEvent(last);
-
-        if(window.isSmartphone()) window.show('map');
-        window.map.setView(position, map.getZoom());
-
-        if(data.marker) {
-            window.plugin.playerTracker.onClickListener({target: data.marker});
-        }
-        return true;
-    }
-
-    window.plugin.playerTracker.onNicknameClicked = function(info) {
-        if (info.event.ctrlKey || info.event.metaKey) {
-            return !plugin.playerTracker.centerMapOnUser(info.nickname);
-        }
-        return true; // don't interrupt hook
-    }
-
-    window.plugin.playerTracker.onSearchResultSelected = function(result, event) {
-        event.stopPropagation(); // prevent chat from handling the click
-
-        if(window.isSmartphone()) window.show('map');
-
-        // if the user moved since the search was started, check if we have a new set of data
-        if(false === window.plugin.playerTracker.centerMapOnUser(result.nickname))
-            map.setView(result.position);
-
-        if(event.type == 'dblclick')
-            map.setZoom(DEFAULT_ZOOM);
-
-        return true;
+      }
+      else {
+        labelLayerEnl_ = window.plugin.playerTracker.drawnTracesEnl;
+        labelLayerRes_ = window.plugin.playerTracker.drawnTracesRes;
+      }
     };
 
-    window.plugin.playerTracker.locale = navigator.languages;
-
-    window.plugin.playerTracker.dateTimeFormat = {
+    /////////////////////////////////////////////////////////////////////////////
+    // remark
+    playerTrackerLabel.getRemarkPlayerData = function (name) {
+      if (!checkRemarkPlayerPluginLoded()) { return null; }
+      return {
+            nameString: window.plugin.remarkPlayer.getRemarkPlayerCombinedNameHtmlString(name, false),
+            remark: window.plugin.remarkPlayer.isRemarkPlayer(name),
+            highlight: window.plugin.remarkPlayer.getRemarkPlayerHighlightFlag(name),
+            };
     };
 
-    window.plugin.playerTracker.onSearch = function(query) {
-        let term = query.term.toLowerCase();
+    var dialogRemarkPlayers = function (option) {
+      if (!checkRemarkPlayerPluginLoded()) { return; }
+      window.plugin.remarkPlayer.remarkPlayersDialog(option);
+    };
 
-        if (term.length && term[0] == '@') term = term.substr(1);
+    /////////////////////////////////////////////////////////////////////////////
+    // label layer state
+    /////////////////////////////////////////////////////////////////////////////
+    var getOverlayLayer = function(name) {
+      var layers = window.layerChooser.getLayers();
+      var overlayLayers = layers.overlayLayers;
+      var layer = overlayLayers.find(function(layer) { return layer.name === this; }, name);
+      return layer;
+    };
+    var getOverlayLayerId = function(name) {
+      var layer = getOverlayLayer(name);
+      return layer.layerId;
+    };
+    var showOverlayLayer = function(id, show) {
+      //setTimeout(function() {
+        window.layerChooser.showLayer(id, show);
+      //}, 50);
+    };
 
-        Object.keys(plugin.playerTracker.stored).forEach(function(nick){
-            let data = plugin.playerTracker.stored[nick];
-            if(nick.toLowerCase().indexOf(term) === -1) return;
+    // layer id 
+    var labelLayerEnlId_ = undefined;
+    var labelLayerResId_ = undefined;
 
-            let event = data.events[data.events.length - 1];
+    var getEnlLayerId = function() {
+      if (labelLayerEnlId_ === undefined) {
+        labelLayerEnlId_ = getOverlayLayerId(LAYER_NAME_ENLIGHTENED);
+      }
+      return labelLayerEnlId_;
+    };
+    var getResLayerId = function() {
+      if (labelLayerResId_ === undefined) {
+        labelLayerResId_ = getOverlayLayerId(LAYER_NAME_RESISTANCE);
+      }
+      return labelLayerResId_;
+    };
 
-            query.addResult({
-            title: '<mark class="nickname help '+TEAM_TO_CSS[getTeam(data)]+'">' + nick + '</mark>',
-            nickname: nick,
-            description: data.team.substr(0,3) + ', last seen ' +
-                new Date(event.time).toLocaleString(window.plugin.playerTracker.locale, window.plugin.playerTracker.dateTimeFormat),
-            position: plugin.playerTracker.getLatLngFromEvent(event),
-            onSelected: window.plugin.playerTracker.onSearchResultSelected,
-            });
-        });
-    }
+    // layer active
+    var getEnlTrackerLayerActive = function() {
+      return window.map.hasLayer(window.plugin.playerTracker.drawnTracesEnl);
+    };
+    var getResTrackerLayerActive = function() {
+      return window.map.hasLayer(window.plugin.playerTracker.drawnTracesRes);
+    };
+    var getEnlLayerActive = function() {
+      return window.map.hasLayer(labelLayerEnl_);
+    };
+    var getResLayerActive = function() {
+      return window.map.hasLayer(labelLayerRes_);
+    };
 
-    window.plugin.playerTracker.setupUserSearch = function() {
-        addHook('nicknameClicked', window.plugin.playerTracker.onNicknameClicked);
-        addHook('search', window.plugin.playerTracker.onSearch);
-    }
+    // layerChooser enable/disable
+    var layerChooserSetState = function(id, name, enable, active) {
+      if (window.useAndroidPanes()) {
+        showOverlayLayer(id, active);
+        return;
+      }
+      var layerSelectorTitleSpan = $('.leaflet-control-layers-selector + span:contains("' + name + '")');
+      if (!layerSelectorTitleSpan) { return; }
+      var layerSelector = layerSelectorTitleSpan.parent();
+      if (!layerSelector) { return; }
+      var input = layerSelector.children('input');
+      if (enable) {
+        layerSelector.removeClass('disabled').attr('title', '');
+      }
+      else {
+        layerSelector.addClass('disabled').attr('title', 'Player Tracker layer desabled.');
+      }
+      if (active) {
+        input.prop("checked", true);
+      }
+      else {
+        input.prop("checked", false);
+      }
+    };
 
+    // layer state
+    var changeEnlLayerState = function(enable, active) {
+      layerChooserSetState(getEnlLayerId(), LAYER_NAME_ENLIGHTENED, enable, active);
+    };
+    var changeResLayerState = function(enable, active) {
+      layerChooserSetState(getResLayerId(), LAYER_NAME_RESISTANCE, enable, active);
+    };
 
-    let setup = plugin.playerTracker.setup;
+    // sync(fit) label layer state with player tracker layer state
+    var checkAndFitChangePlayerTrackerLayerState = function() {
+      if (!setting_.separateLayerFlag) { return; }
+      // Enlightened
+      if (!getEnlTrackerLayerActive() && getEnlLayerActive()) {
+        console.log('playerTrackerLabel.onChangePlayerTrackerLayerState:Change Enl');
+        changeEnlLayerState(false, false);
+      }
+      // Resistance
+      if (!getResTrackerLayerActive() && getResLayerActive()) {
+        console.log('playerTrackerLabel.onChangePlayerTrackerLayerState:Change Res');
+        changeResLayerState(false, false);
+      }
+    };
 
-    setup.info = plugin_info; //add the script info data to the function as a property
-    if (typeof changelog !== 'undefined') setup.info.changelog = changelog;
-    if(!window.bootPlugins) window.bootPlugins = [];
-    window.bootPlugins.push(setup);
-    // if IITC has already booted, immediately run the 'setup' function
-    if(window.iitcLoaded && typeof setup === 'function') setup();
+    /////////////////////////////////////////////////////////////////////////////
+    // Leaflet event
+    /////////////////////////////////////////////////////////////////////////////
+    var onLayerAdd = function (data) {
+      if (!setting_.separateLayerFlag) { return; }
+      // console.log('playerTrackerLabel:onLayerAdd');
+      if (data.layer === window.plugin.playerTracker.drawnTracesEnl) {
+        console.log('playerTrackerLabel:onLayerAdd:playerTracker:Enl');
+        changeEnlLayerState(true, labelLayerEnlEnable_);
+      }
+      else if (data.layer === window.plugin.playerTracker.drawnTracesRes) {
+        console.log('playerTrackerLabel:onLayerAdd:playerTracker:Res');
+        changeResLayerState(true, labelLayerResEnable_);
+      }
+    };
+
+    var onLayerRemove = function (data) {
+      if (!setting_.separateLayerFlag) { return; }
+      // console.log('playerTrackerLabel:onLayerRemove');
+      if (data.layer === window.plugin.playerTracker.drawnTracesEnl) {
+        console.log('playerTrackerLabel:onLayerRemove:playerTrackerEnl');
+        labelLayerEnlEnable_ = getEnlLayerActive();
+        changeEnlLayerState(false, false);
+      }
+      else if (data.layer === window.plugin.playerTracker.drawnTracesRes) {
+        console.log('playerTrackerLabel:onLayerRemove:playerTracker:Res');
+        labelLayerResEnable_ = getResLayerActive();
+        changeResLayerState(false, false);
+      }
+    };
+
+    var onZoomEnd = function () {
+      if (!setting_.separateLayerFlag) { return; }
+      // console.log('playerTrackerLabel:onZoomEnd');
+      if (window.map.getZoom() < window.PLAYER_TRACKER_MIN_ZOOM) {
+        labelLayerEnl_.clearLayers();
+        labelLayerRes_.clearLayers();
+      }
+    };
+
+    /////////////////////////////////////////////////////////////////////////////
+    // toolbox
+    /////////////////////////////////////////////////////////////////////////////
+    var toolboxUI = function () {
+      if(window.useAndroidPanes()){ window.show('map'); }
+      dialogSetting();
+    };
+
+    playerTrackerLabel.dialogSettingBuildHtml = function() {
+      return '' 
+      + '<div>font size: <input type="number" id="playerTrackerLabel-dialogSetting-labelFontSize" min="5" max="30" step="1"></input></div>'
+      + '<div><dl>'
+      + '<dt>align:</dt>'
+      + '<dd>vertical: '
+      + '<select id="playerTrackerLabel-dialogSetting-labelVerticalAlign">'
+      + '<option value="' + VerticalAlign.Top + '">top</option>'
+      + '<option value="' + VerticalAlign.Middle + '">middle</option>'
+      + '<option value="' + VerticalAlign.Bottom + '">bottom</option>'
+      + '</select>'
+      + '</dd>'
+      + '<dd>horizontal: '
+      + '<select id="playerTrackerLabel-dialogSetting-labelHorizontalAlign">'
+      + '<option value="' + HorizontalAlign.Left + '">left</option>'
+      + '<option value="' + HorizontalAlign.Center + '">center</option>'
+      + '<option value="' + HorizontalAlign.Right + '">right</option>'
+      + '</select>'
+      + '</dd>'
+      + '</dl></div>'
+      + '<div class="playerTrackerLabel-dialog-groupDiv" id="playerTrackerLabel-dialogSetting-remarkPlayer"><dl>'
+      + '<dt>remarks:</dt>'
+      + '<dd><a class="playerTrackerLabel-dialog-linkButton" id="playerTrackerLabel-dialogSetting-RemarkPlayerSetting">remarked players</a></dd>'
+      /*
+      + '<dd>display filter: '
+      + '<select id="playerTrackerLabel-dialogSetting-labelFilterByRemarkPlayer">'
+      + '<option value="' + RemarksFilter.None + '">none</option>'
+      + '<option value="' + RemarksFilter.Remark + '">remark</option>'
+      + '<option value="' + RemarksFilter.Highlight + '">highlight</option>'
+      + '<option value="' + RemarksFilter.NotRemark + '">not remark</option>'
+      + '<option value="' + RemarksFilter.NotHighlight + '">not highlight</option>'
+      + '<option value="' + RemarksFilter.RemarkExceptHighlight + '">remark except highlight</option>'
+      + '</select>'
+      + '</dd>'
+      */
+      + '</dl></div>'
+      + '<div class="playerTrackerLabel-dialog-groupDiv"><input type="checkbox" id="playerTrackerLabel-dialogSetting-SeparateLayer">draw labels on own layer</input></div>'
+    };
+
+    playerTrackerLabel.dialogSettingOnOpen = function(dlgEventData) {
+      console.log('playerTrackerLabel:dialogSettingOnOpen');
+      // set cueent setting value
+      var setting = loadSetting();
+      dialogSettingSetValues(setting);
+
+      // click action
+      if (checkRemarkPlayerPluginLoded()) {
+        $('#playerTrackerLabel-dialogSetting-RemarkPlayerSetting').on('click', dlgEventData, dialogSettingOnRemarkPlayerSetting);
+      }
+      else {
+        $('#playerTrackerLabel-dialogSetting-remarkPlayer').hide();
+      }
+    };
+
+    playerTrackerLabel.dialogSettingOnOk = function() {
+      console.log('playerTrackerLabel:dialogSettingOnOk');
+      var setting = loadSetting();
+      var valuesResult = dialogSettingGetValues(setting);
+      if (valuesResult.saveFlag) {
+        saveSetting(valuesResult.setting);
+      }
+    };
+
+    var dialogSettingOnRemarkPlayerSetting = function(dialogSettingEventData) {
+      var setting = loadSetting();
+      var valuesResult = dialogSettingGetValues(setting);
+      var saveValuesData = {};
+      if (dialogSettingEventData.data.dlgSaveValuesFunc) {
+        saveValuesData = dialogSettingEventData.data.dlgSaveValuesFunc();
+      }
+      dialogRemarkPlayers({
+        onPreOpen: function(eventData) {
+          if (platformIsModalDialogOnly()) {
+            // iOS iitc has a limitation that only one dialog can be shown at a time
+            // close dialogSetting dialog
+            dialogSettingEventData.data.dlg.dialog('close');
+          }
+        },
+        onClose: function(eventData) {
+          if (platformIsModalDialogOnly()) {
+            // iOS iitc has a limitation that only one dialog can be shown at a time
+            // re-open dialog
+            dialogSettingEventData.data.dlgReOpenFunc();
+            dialogSettingSetValues(valuesResult.setting);
+            if (dialogSettingEventData.data.dlgRestoreValuesFunc) {
+              dialogSettingEventData.data.dlgRestoreValuesFunc(saveValuesData);
+            }
+          }
+        },
+      });
+    };
+    
+    var dialogSettingSetValues = function(setting) {
+      if (!setting) {
+        setting = SETTING_DEFAULT;
+      }
+      $('#playerTrackerLabel-dialogSetting-SeparateLayer').prop("checked", setting.separateLayerFlag);
+      $('#playerTrackerLabel-dialogSetting-labelFontSize').val(setting.labelFontSize);
+      $('#playerTrackerLabel-dialogSetting-labelVerticalAlign').val(setting.labelVerticalAlign);
+      $('#playerTrackerLabel-dialogSetting-labelHorizontalAlign').val(setting.labelHorizontalAlign);
+      // $('#playerTrackerLabel-dialogSetting-labelFilterByRemarkPlayer').val(setting.labelFilterByRemarkPlayer);
+    };
+
+    var dialogSettingGetValues = function(setting) {
+      // copy current
+      if (setting) {
+        setting = $.extend(true, {}, setting);
+      }
+      else {
+        setting = $.extend(true, {}, SETTING_DEFAULT);
+      }
+      var saveFlag = false;
+      var value;
+
+      value = $('#playerTrackerLabel-dialogSetting-SeparateLayer').prop('checked');
+      if (value !== setting.separateLayerFlag) {
+        setting.separateLayerFlag = value;
+        saveFlag = true;
+      }
+      value = Number($('#playerTrackerLabel-dialogSetting-labelFontSize').val());
+      if (value != setting.labelFontSize) {
+        setting.labelFontSize = value;
+        saveFlag = true;
+      }
+      value = $('#playerTrackerLabel-dialogSetting-labelVerticalAlign').val();
+      if (value != setting.labelVerticalAlign) {
+        setting.labelVerticalAlign = value;
+        saveFlag = true;
+      }
+      value = $('#playerTrackerLabel-dialogSetting-labelHorizontalAlign').val();
+      if (value != setting.labelHorizontalAlign) {
+        setting.labelHorizontalAlign = value;
+        saveFlag = true;
+      }
+      /*
+      value = $('#playerTrackerLabel-dialogSetting-labelFilterByRemarkPlayer').val();
+      if (value != setting.labelFilterByRemarkPlayer) {
+        setting.labelFilterByRemarkPlayer = value;
+        saveFlag = true;
+      }
+      */
+      return { setting:setting, saveFlag:saveFlag };
+    };
+
+    var dialogSetting = function () {
+      var html = '<div>' + 
+        playerTrackerLabel.dialogSettingBuildHtml() +
+        '<div><p>All settings will be effective after reload.</p></div>' +
+        '</div>';
+
+      var dlg = window.dialog({
+        html: html,
+        dialogClass: 'playerTrackerLabel-dialogSetting',
+        id: 'playerTrackerLabel-dialogSetting',
+        title: 'Setting',
+        buttons: {
+          'OK' : function() { 
+            playerTrackerLabel.dialogSettingOnOk();
+            $(this).dialog('close');
+          },
+          'Cancel' : function() { $(this).dialog('close'); }
+        },
+      });
+      playerTrackerLabel.dialogSettingOnOpen({dlg:dlg, dlgReOpenFunc:dialogSetting});
+      // focus
+      dlg.siblings('.ui-dialog-buttonpane').find('button:eq(0)').focus();
+    };
+
+    /////////////////////////////////////////////////////////////////////////////
+    // local storage access
+    /////////////////////////////////////////////////////////////////////////////
+    const STORAGE_KEY_VERSION = 'Version';
+    const STORAGE_KEY_SETTING = 'setting';
+
+    const V1_KEY_STORAGE = 'plugin-player-tracker-label';
+    const V1_STORAGE_KEY_SETTINGS = 'settings';
+    const V1_SETTING_SEPARATE_LAYER = 'SeparateLayer';
+    const V1_SETTING_LABEL_FONT_SIZE = 'LabelFontSize';
+    const V1_SETTING_LABEL_VERTICAL_ALIGN = 'LabelVerticalAlign';
+    const V1_SETTING_LABEL_HORIZONTAL_ALIGN = 'LabelHorizontalAlign';
+
+    // storage data
+    var storageData_ = {};
+    // Version
+    const STORAGE_VERSION_000 = 0;
+    const STORAGE_VERSION_001 = 1;
+    const STORAGE_VERSION_002 = 2;
+    // Cureent Version
+    const STORAGE_VERSION = STORAGE_VERSION_002;
+
+    // clear strage data
+    var clearStorage = function () {
+      localStorage.removeItem(KEY_STORAGE);
+    };
+
+    // setup strage data
+    var setupStorage = function () {
+      var saveFlag = false;
+      var storageData;
+      if (localStorage[KEY_STORAGE] == null) {
+        if (localStorage[V1_KEY_STORAGE] == null) {
+          // new strage data
+          storageData = {};
+          storageData[STORAGE_KEY_VERSION] = STORAGE_VERSION;
+          saveFlag = true;
+        }
+        else {
+          // load V1 strage data
+          storageData = JSON.parse(localStorage[V1_KEY_STORAGE]);
+        }
+      }
+      else {
+        // load strage data
+        storageData = JSON.parse(localStorage[KEY_STORAGE]);
+      }
+      if (storageData[STORAGE_KEY_VERSION] == null) {
+        // if storage version is undefined then storage version is zero
+        storageData[STORAGE_KEY_VERSION] = STORAGE_VERSION_000;
+      }
+      if (storageData[STORAGE_KEY_VERSION] < STORAGE_VERSION) {
+        // migrate storage data
+        saveFlag = migrateStorage(storageData);
+      }
+      /*
+      * setup default
+      */
+      // settings
+      if (storageData[STORAGE_KEY_SETTING] == null) {
+        storageData[STORAGE_KEY_SETTING] = {};
+        saveFlag = true;
+      }
+      var setting = storageData[STORAGE_KEY_SETTING];
+      for (var key in SETTING_DEFAULT) {
+        if (!setting.hasOwnProperty(key)) {
+          setting[key] = SETTING_DEFAULT[key];
+          saveFlag = true;
+        }
+      }
+      /*
+      * save
+      */
+      if (saveFlag) {
+        localStorage[KEY_STORAGE] = JSON.stringify(storageData);
+      }
+    };
+
+    // migrate strage data to current version
+    var migrateStorage = function (storageData) {
+      if (storageData[STORAGE_KEY_VERSION] >= STORAGE_VERSION) {
+        // Migration is not need
+        return false;
+      }
+      console.log('playerTrackerLabel:migrateStorage Start');
+      console.log(storageData);
+      var saveFlag = false;
+      // version 0 -> version 1
+      if (storageData[STORAGE_KEY_VERSION] <= STORAGE_VERSION_000) {
+        console.log('playerTrackerLabel:migrateStorage:0->1');
+        // remarked player management function has been separated into RemarkPlayer plugin
+        // here it only convert the settings of the old version to the newest pre-separateing settings
+        var STORAGE_KEY_REMARK_PLAYERS = 'remarkPlayers';
+        var list = storageData[STORAGE_KEY_REMARK_PLAYERS];
+        var remarks = {};
+        var i, len = list.length;
+        for (i = 0; i < len; i++) {
+          remarks[list[i]] = {};
+        }
+        // delete old
+        delete storageData[STORAGE_KEY_REMARK_PLAYERS];
+        if (storageData[V1_STORAGE_KEY_SETTINGS] != null) {
+          delete storageData[V1_STORAGE_KEY_SETTINGS];
+        }
+        // set version
+        storageData[STORAGE_KEY_VERSION] = STORAGE_VERSION_001;
+        storageData[STORAGE_KEY_REMARK_PLAYERS] = remarks;
+        saveFlag = true;
+      }
+      // version 1 -> version 2
+      if (storageData[STORAGE_KEY_VERSION] <= STORAGE_VERSION_001) {
+        console.log('playerTrackerLabel:migrateStorage:1->2');
+        if (storageData[V1_STORAGE_KEY_SETTINGS] != null) {
+          var settingsV1 = storageData[V1_STORAGE_KEY_SETTINGS];
+          storageData[STORAGE_KEY_SETTING] = {};
+          saveFlag = true;
+          var settingV2 = storageData[STORAGE_KEY_SETTING]
+          if (settingsV1[V1_SETTING_SEPARATE_LAYER]) {
+            settingV2.separateLayerFlag = settingsV1[V1_SETTING_SEPARATE_LAYER];
+          }
+          if (settingsV1[V1_SETTING_LABEL_FONT_SIZE]) {
+            settingV2.labelFontSize = settingsV1[V1_SETTING_LABEL_FONT_SIZE];
+          }
+          if (settingsV1[V1_SETTING_LABEL_VERTICAL_ALIGN]) {
+            settingV2.labelVerticalAlign = settingsV1[V1_SETTING_LABEL_VERTICAL_ALIGN];
+          }
+          if (settingsV1[V1_SETTING_LABEL_HORIZONTAL_ALIGN]) {
+            settingV2.labelHorizontalAlign = settingsV1[V1_SETTING_LABEL_HORIZONTAL_ALIGN];
+          }
+          // delete old
+          delete storageData[V1_STORAGE_KEY_SETTINGS];
+          // set version
+          storageData[STORAGE_KEY_VERSION] = STORAGE_VERSION_002;
+        }
+      }
+      console.log(storageData);
+      console.log('playerTrackerLabel:migrateStorage End');
+
+      return saveFlag;
+    };
+
+    var loadSetting = function () {
+      var storageData = JSON.parse(localStorage[KEY_STORAGE]);
+      return storageData[STORAGE_KEY_SETTING];
+    };
+
+    var saveSetting = function (setting) {
+      var storageData = JSON.parse(localStorage[KEY_STORAGE]);
+      storageData[STORAGE_KEY_SETTING] = setting;
+      localStorage[KEY_STORAGE] = JSON.stringify(storageData);
+    };
+
+    ////////////////////////////////////////////////////////////////////////
+    // utility
+    var isiOS_ = false;
+    var isAndroid_ = false;
+    var isModalDialogOnly_ = false; 
+
+    var setupUtility = function () {
+      isiOS_ = navigator.userAgent.match(/iPhone|iPad|iPod/i)?true:false;
+      isAndroid_ = navigator.userAgent.match(/Android.*Mobile/)?true:false;
+      isModalDialogOnly_ = isiOS_ && window.useAndroidPanes();
+
+      $('<span id="playerTrackerLabel-MeasureText" class="playerTrackerLabel playerTrackerLabel-text-Enl" style="visibility:hidden;position:absolute;white-space:nowrap;"></span>').appendTo('body');
+
+      // for debug
+      if (window.plugin.debug && window.plugin.debug.debugValues) {
+        if (window.plugin.debug.debugValues.isiOS != undefined) {
+          isiOS_ = window.plugin.debug.debugValues.isiOS;
+        }
+        if (window.plugin.debug.debugValues.isAndroid != undefined) {
+          isAndroid_ = window.plugin.debug.debugValues.isAndroid;
+        }
+        if (window.plugin.debug.debugValues.isModalDialogOnly != undefined) {
+          isModalDialogOnly_ = window.plugin.debug.debugValues.isModalDialogOnly;
+        }
+      }
+    };
+    var platformIsiOS = function() { return isiOS_; };
+    var platformIsAndroid = function() { return isAndroid_; };
+    var platformIsModalDialogOnly = function() { return isModalDialogOnly_; };
+
+    var measureTextWidth = function (text) {
+      var element = $('#playerTrackerLabel-MeasureText');
+      var width = element.text(text).get(0).offsetWidth;
+      element.empty();
+      return width;
+    };
+
+    var ArrayIndexOf = function (array, val) {
+      var i, len = array.length, result = -1;
+      for (i = 0; i < len; i++) {
+        if (array[i] === val) {
+          result = i;
+          break;
+        }
+      }
+      return result;
+    };
+
+    // namespace END //////////////////////////////////////////////////////////
+  }(window.plugin.playerTrackerLabel));
+
+  /////////////////////////////////////////////////////////////////////////////
+  // setup
+  /////////////////////////////////////////////////////////////////////////////
+  var setup = function() {
+    window.plugin.playerTrackerLabel.setup();
+  };
+  window.plugin.playerTrackerLabel.loadCompleated = true;
+
+  // PLUGIN END //////////////////////////////////////////////////////////
+
+  setup.info = plugin_info; //add the script info data to the function as a property
+  if (!window.bootPlugins) window.bootPlugins = [];
+  window.bootPlugins.push(setup);
+  // if IITC has already booted, immediately run the 'setup' function
+  if (window.iitcLoaded && typeof setup === 'function') setup();
 } // wrapper end
 // inject code into site context
 var script = document.createElement('script');
 var info = {};
 if (typeof GM_info !== 'undefined' && GM_info && GM_info.script) info.script = { version: GM_info.script.version, name: GM_info.script.name, description: GM_info.script.description };
-script.appendChild(document.createTextNode('('+ wrapper +')('+JSON.stringify(info)+');'));
+script.appendChild(document.createTextNode('(' + wrapper + ')(' + JSON.stringify(info) + ');'));
 (document.body || document.head || document.documentElement).appendChild(script);
 
